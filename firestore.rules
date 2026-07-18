@@ -1,0 +1,130 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isCurrentUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isBusinessOwner(businessId) {
+      return signedIn()
+        && get(
+          /databases/$(database)/documents/businesses/$(businessId)
+        ).data.ownerId == request.auth.uid;
+    }
+
+    function isActiveBusinessMember(businessId) {
+      return signedIn()
+        && exists(
+          /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+        ).data.status == 'active';
+    }
+
+    function canCompleteSales(businessId) {
+      return isBusinessOwner(businessId)
+        || (
+          isActiveBusinessMember(businessId)
+          && get(
+            /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+          ).data.role in ['manager', 'cashier']
+        );
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow create, read, update: if isCurrentUser(userId);
+      allow delete: if false;
+    }
+
+    // Businesses
+    match /businesses/{businessId} {
+
+      // A signed-in user can create a business only for themselves.
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.businessId == businessId;
+
+      // Owner or active member can read the business.
+      allow read: if isBusinessOwner(businessId)
+        || isActiveBusinessMember(businessId);
+
+      // Only the owner can currently update the business.
+      allow update: if isBusinessOwner(businessId)
+        && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if false;
+
+      // Business members
+      match /members/{memberId} {
+
+        // Supports creation of the first owner membership in the
+        // same batch that creates the business.
+        allow create: if signedIn() && (
+          (
+            memberId == request.auth.uid
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.role == 'owner'
+            && request.resource.data.status == 'active'
+            && getAfter(
+              /databases/$(database)/documents/businesses/$(businessId)
+            ).data.ownerId == request.auth.uid
+          )
+          || isBusinessOwner(businessId)
+        );
+
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+
+        allow update, delete: if isBusinessOwner(businessId);
+      }
+
+      // A completed sale is a single Firestore transaction that creates its
+      // receipt and accounting records while updating stock and credit.
+      match /sales/{saleId} {
+        allow create: if canCompleteSales(businessId);
+        allow update, delete: if isBusinessOwner(businessId);
+      }
+
+      match /products/{productId} {
+        allow update: if canCompleteSales(businessId);
+      }
+
+      match /customers/{customerId} {
+        allow update: if canCompleteSales(businessId);
+      }
+
+      match /counters/{counterId} {
+        allow create, update: if canCompleteSales(businessId);
+      }
+
+      match /activity/{activityId} {
+        allow create: if canCompleteSales(businessId);
+      }
+
+      match /analytics/{analyticsId} {
+        allow create, update: if canCompleteSales(businessId);
+      }
+
+      match /customer_ledger/{entryId} {
+        allow create: if canCompleteSales(businessId);
+      }
+
+      // Sales, products, customers, expenses, activity and other
+      // business subcollections.
+      match /{document=**} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+
+        allow create, update, delete: if isBusinessOwner(businessId);
+      }
+    }
+  }
+}

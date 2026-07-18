@@ -1,0 +1,25 @@
+{
+	"firestore": {
+		"rules": "firestore.rules"
+	},
+	"flutter": {
+		"platforms": {
+			"android": {
+				"default": {
+					"projectId": "sabibom-app",
+					"appId": "1:939523940329:android:9c1a8cd7ef0a07e5f03578",
+					"fileOutput": "android/app/google-services.json"
+				}
+			},
+			"dart": {
+				"lib/firebase_options.dart": {
+					"projectId": "sabibom-app",
+					"configurations": {
+						"android": "1:939523940329:android:9c1a8cd7ef0a07e5f03578",
+						"web": "1:939523940329:web:ade397a5e19770f1f03578"
+					}
+				}
+			}
+		}
+	}
+}

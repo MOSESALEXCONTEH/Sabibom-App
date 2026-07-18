@@ -1,0 +1,4 @@
+<resources>
+    <!-- Replace with the numeric Meta App ID before testing Facebook sign-in. -->
+    <string name="facebook_app_id">YOUR_FACEBOOK_APP_ID</string>
+</resources>

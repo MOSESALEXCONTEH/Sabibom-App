@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "939523940329",
+    "firebase_url": "https://sabibom-app-default-rtdb.firebaseio.com",
+    "project_id": "sabibom-app",
+    "storage_bucket": "sabibom-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:939523940329:android:9c1a8cd7ef0a07e5f03578",
+        "android_client_info": {
+          "package_name": "com.sabibom.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "939523940329-evln3kbgsr958bs8g0ijf8jvlu5ll2k4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sabibom.app",
+            "certificate_hash": "c0e3e0cec300add59e5c35acf4cb04d67c1b646e"
+          }
+        },
+        {
+          "client_id": "939523940329-bvfvuqmm7f624lrqt20bk3p3dt7gmbij.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCo4Hxkq1tfdEreugEuLkAOE0RPNUctSSk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "939523940329-bvfvuqmm7f624lrqt20bk3p3dt7gmbij.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "939523940329-vtm4ospkr0oj6rkq4r3oa8ss1hsr1sqe.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.sabibom"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
