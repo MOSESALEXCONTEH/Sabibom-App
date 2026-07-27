@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/inventory/:p1/:p2/:p3",
+      "destination": "/api/inventory?p1=:p1&p2=:p2&p3=:p3"
+    },
+    {
+      "source": "/api/inventory/:p1/:p2",
+      "destination": "/api/inventory?p1=:p1&p2=:p2"
+    },
+    {
+      "source": "/api/inventory/:p1",
+      "destination": "/api/inventory?p1=:p1"
+    },
+    {
+      "source": "/api/sabi/:action",
+      "destination": "/api/sabi?action=:action"
+    },
+    {
+      "source": "/api/cron/:job",
+      "destination": "/api/cron?job=:job"
+    },
+    {
+      "source": "/api/notifications/:action",
+      "destination": "/api/notifications?action=:action"
+    },
+    {
+      "source": "/api/team/:action",
+      "destination": "/api/team?action=:action"
+    },
+    {
+      "source": "/api/pinata/:action",
+      "destination": "/api/pinata?action=:action"
+    },
+    {
+      "source": "/api/approvals/:action",
+      "destination": "/api/approvals?action=:action"
+    }
+  ]
+}
