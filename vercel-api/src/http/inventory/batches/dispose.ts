@@ -8,6 +8,11 @@ import {
   summarizeInventoryBatches,
   type InventoryBatchSummaryInput,
 } from "../../../services/inventory/purchase-intelligence";
+import {
+  assertActiveBranchInTransaction,
+  branchInventoryRef,
+  requireActiveBranchAccess,
+} from "../../../services/inventory/branch-inventory";
 import {requireAppPermission} from "../../../services/team/membership-service";
 import {errors} from "../../../utils/api-errors";
 import {sendSuccess} from "../../../utils/api-response";
@@ -15,6 +20,7 @@ import {createHandler, readJsonBody} from "../../../utils/handler";
 
 const disposeBatchSchema = z.object({
   businessId: businessIdSchema,
+  branchId: z.string().trim().min(1).max(128),
   batchId: z.string().trim().min(1).max(128),
   quantity: z.number().finite().positive(),
   reason: z.string().trim().min(2).max(500),
@@ -38,7 +44,10 @@ export default createHandler(
     });
 
     const db = adminFirestore();
-    const businessRef = db.collection("businesses").doc(data.businessId);
+    const branchContext = await requireActiveBranchAccess({
+      db, uid: identity.uid, businessId: data.businessId, branchId: data.branchId,
+    });
+    const businessRef = branchContext.businessRef;
     const batchRef = businessRef
       .collection("inventory_batches")
       .doc(data.batchId);
@@ -52,6 +61,11 @@ export default createHandler(
         transaction.get(businessRef),
         transaction.get(batchRef),
       ]);
+      await assertActiveBranchInTransaction({
+        transaction,
+        branchRef: branchContext.branchRef,
+        businessId: data.businessId,
+      });
       if (!businessSnapshot.exists) {
         throw errors.notFound("The selected business no longer exists.");
       }
@@ -60,6 +74,9 @@ export default createHandler(
       }
 
       const batchData = batchSnapshot.data() ?? {};
+      if (batchData.branchId !== branchContext.branchId) {
+        throw errors.invalidArgument("This batch belongs to another branch.");
+      }
       const productId =
         typeof batchData.productId === "string"
           ? batchData.productId.trim()
@@ -76,13 +93,17 @@ export default createHandler(
       }
 
       const productRef = businessRef.collection("products").doc(productId);
+      const inventoryRef = branchInventoryRef(branchContext, productId);
       const batchesQuery = businessRef
         .collection("inventory_batches")
-        .where("productId", "==", productId);
-      const [productSnapshot, batchQuerySnapshot] = await Promise.all([
-        transaction.get(productRef),
-        transaction.get(batchesQuery),
-      ]);
+        .where("productId", "==", productId)
+        .where("branchId", "==", branchContext.branchId);
+      const [productSnapshot, inventorySnapshot, batchQuerySnapshot] =
+        await Promise.all([
+          transaction.get(productRef),
+          transaction.get(inventoryRef),
+          transaction.get(batchesQuery),
+        ]);
       if (!productSnapshot.exists) {
         throw errors.notFound("The selected product no longer exists.");
       }
@@ -97,7 +118,13 @@ export default createHandler(
         (businessSnapshot.data()?.timezone as string | undefined) ??
         "Africa/Freetown";
       const tracksExpiry = productData.tracksExpiry === true;
-      const stockBefore = numberValue(productData.quantity, 0);
+      const inventoryData = inventorySnapshot.data() ?? {};
+      const stockBefore = numberValue(
+        inventoryData.quantity,
+        branchContext.branchId === "main"
+          ? numberValue(productData.quantity, 0)
+          : 0,
+      );
       const quantityRemaining = remaining - data.quantity;
       const batchStatus: InventoryBatchSummaryInput["status"] =
         quantityRemaining <= 0
@@ -161,6 +188,8 @@ export default createHandler(
 
       transaction.create(movementRef, {
         id: movementRef.id,
+        businessId: data.businessId,
+        branchId: branchContext.branchId,
         productId,
         productName,
         batchId: data.batchId,
@@ -177,20 +206,50 @@ export default createHandler(
         createdAt: FieldValue.serverTimestamp(),
       });
 
+      transaction.set(
+        inventoryRef,
+        {
+          businessId: data.businessId,
+          branchId: branchContext.branchId,
+          productId,
+          quantity: stockAfter,
+          reservedQuantity: numberValue(inventoryData.reservedQuantity, 0),
+          availableQuantity: Math.max(
+            0,
+            stockAfter - numberValue(inventoryData.reservedQuantity, 0),
+          ),
+          lowStockThreshold: numberValue(
+            inventoryData.lowStockThreshold,
+            numberValue(productData.lowStockThreshold, 0),
+          ),
+          averageUnitCostMinor: numberValue(
+            inventoryData.averageUnitCostMinor,
+            productCostPrice(productData),
+          ),
+          stockCostValueMinor: summary.stockCostValueMinor,
+          expectedStockRevenueMinor: summary.expectedStockRevenueMinor,
+          potentialProfitRemainingMinor: summary.potentialProfitRemainingMinor,
+          realizedGrossProfitMinor: numberValue(
+            inventoryData.realizedGrossProfitMinor,
+            0,
+          ),
+          expiryStatus: summary.expiryStatus,
+          nextExpiryDate: summary.nextExpiryDate
+            ? dateOnlyTimestamp(summary.nextExpiryDate)
+            : null,
+          nextExpiryBatchId: summary.nextExpiryBatchId,
+          nextExpiryBatchQuantity: summary.nextExpiryBatchQuantity,
+          expiringQuantity: summary.expiringQuantity,
+          expiredQuantity: summary.expiredQuantity,
+          unknownExpiryQuantity: summary.unknownExpiryQuantity,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: identity.uid,
+        },
+        {merge: true},
+      );
+      // Compatibility aggregate only.
       transaction.update(productRef, {
-        quantity: stockAfter,
-        stockCostValueMinor: summary.stockCostValueMinor,
-        expectedStockRevenueMinor: summary.expectedStockRevenueMinor,
-        potentialProfitRemainingMinor: summary.potentialProfitRemainingMinor,
-        expiryStatus: summary.expiryStatus,
-        nextExpiryDate: summary.nextExpiryDate
-          ? dateOnlyTimestamp(summary.nextExpiryDate)
-          : null,
-        nextExpiryBatchId: summary.nextExpiryBatchId,
-        nextExpiryBatchQuantity: summary.nextExpiryBatchQuantity,
-        expiringQuantity: summary.expiringQuantity,
-        expiredQuantity: summary.expiredQuantity,
-        unknownExpiryQuantity: summary.unknownExpiryQuantity,
+        quantity: FieldValue.increment(-data.quantity),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: identity.uid,
       });
@@ -198,6 +257,7 @@ export default createHandler(
       transaction.create(activityRef, {
         activityId: activityRef.id,
         businessId: data.businessId,
+        branchId: branchContext.branchId,
         type: "expired_stock_disposal",
         title: "Expired stock disposed",
         subtitle: `${productName} · ${data.quantity} · ${data.reason}`,

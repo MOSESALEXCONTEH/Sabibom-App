@@ -16,6 +16,11 @@ import {
   summarizeInventoryBatches,
   type InventoryBatchSummaryInput,
 } from "../../../services/inventory/purchase-intelligence";
+import {
+  assertActiveBranchInTransaction,
+  branchInventoryRef,
+  requireActiveBranchAccess,
+} from "../../../services/inventory/branch-inventory";
 import {requireAppPermission} from "../../../services/team/membership-service";
 import {errors} from "../../../utils/api-errors";
 import {sendSuccess} from "../../../utils/api-response";
@@ -53,6 +58,9 @@ const completeSaleSchema = z
   .object({
     saleId: z.string().uuid(),
     businessId: businessIdSchema,
+    branchId: z.string().trim().min(1).max(128),
+    branchNameSnapshot: z.string().trim().min(1).max(160),
+    branchCodeSnapshot: z.string().trim().min(2).max(12),
     items: z.array(saleItemSchema).min(1).max(200),
     paymentMethod: paymentMethodSchema,
     amountPaidMinor: z.number().int().min(0).default(0),
@@ -137,9 +145,17 @@ export default createHandler(
     }
 
     const db = adminFirestore();
-    const businessRef = db.collection("businesses").doc(data.businessId);
+    const branchContext = await requireActiveBranchAccess({
+      db,
+      uid: identity.uid,
+      businessId: data.businessId,
+      branchId: data.branchId,
+    });
+    const businessRef = branchContext.businessRef;
     const saleRef = businessRef.collection("sales").doc(data.saleId);
-    const counterRef = businessRef.collection("counters").doc("sales");
+    const counterRef = branchContext.branchRef
+      .collection("counters")
+      .doc("sales");
     const activityRef = businessRef.collection("activity").doc();
     const now = new Date();
     const createdByName = data.cashierName?.trim() || identity.email || "Team member";
@@ -149,6 +165,11 @@ export default createHandler(
         transaction.get(businessRef),
         transaction.get(saleRef),
       ]);
+      await assertActiveBranchInTransaction({
+        transaction,
+        branchRef: branchContext.branchRef,
+        businessId: data.businessId,
+      });
       if (existingSale.exists) {
         const existing = existingSale.data() ?? {};
         return {
@@ -196,12 +217,19 @@ export default createHandler(
           businessRef.collection("products").doc(productId),
         ]),
       );
+      const inventoryRefs = new Map(
+        trackedProductIds.map((productId) => [
+          productId,
+          branchInventoryRef(branchContext, productId),
+        ]),
+      );
       const batchQueries = new Map(
         trackedProductIds.map((productId) => [
           productId,
           businessRef
             .collection("inventory_batches")
-            .where("productId", "==", productId),
+            .where("productId", "==", productId)
+            .where("branchId", "==", branchContext.branchId),
         ]),
       );
 
@@ -209,13 +237,23 @@ export default createHandler(
         ? businessRef.collection("customers").doc(data.customerId)
         : null;
 
-      const [counterSnapshot, customerSnapshot, productResults, batchResults] =
-        await Promise.all([
+      const [
+        counterSnapshot,
+        customerSnapshot,
+        productResults,
+        inventoryResults,
+        batchResults,
+      ] = await Promise.all([
           transaction.get(counterRef),
           customerRef ? transaction.get(customerRef) : Promise.resolve(null),
           Promise.all(
             trackedProductIds.map((productId) =>
               transaction.get(productRefs.get(productId)!),
+            ),
+          ),
+          Promise.all(
+            trackedProductIds.map((productId) =>
+              transaction.get(inventoryRefs.get(productId)!),
             ),
           ),
           Promise.all(
@@ -239,6 +277,12 @@ export default createHandler(
           productResults[index],
         ]),
       );
+      const inventories = new Map(
+        trackedProductIds.map((productId, index) => [
+          productId,
+          inventoryResults[index],
+        ]),
+      );
       const batchesByProduct = new Map(
         trackedProductIds.map((productId, index) => [
           productId,
@@ -257,7 +301,13 @@ export default createHandler(
           throw errors.invalidArgument(`${item.name} is no longer available.`);
         }
         const productData = product.data() ?? {};
-        const available = numberValue(productData.quantity, 0);
+        const inventoryData = inventories.get(item.productId)?.data() ?? {};
+        const available = numberValue(
+          inventoryData.quantity,
+          branchContext.branchId === "main"
+            ? numberValue(productData.quantity, 0)
+            : 0,
+        );
         if (available < item.quantity) {
           throw errors.invalidArgument(
             `Not enough stock for ${item.name}. Only ${available} remaining.`,
@@ -269,7 +319,7 @@ export default createHandler(
       const nextNumber = Math.trunc(
         numberValue(counterSnapshot.data()?.nextNumber, 1),
       );
-      const receiptNumber = `SB-${dateKey}-${String(nextNumber).padStart(4, "0")}`;
+      const receiptNumber = `${branchContext.branchCode}-${String(nextNumber).padStart(6, "0")}`;
       const paymentStatus =
         totals.balanceDueMinor === 0
           ? "paid"
@@ -327,9 +377,15 @@ export default createHandler(
         const tracksExpiry = productData?.tracksExpiry === true;
 
         if (item.trackStock && productId && productData) {
+          const inventoryData = inventories.get(productId)?.data() ?? {};
           const before =
             runningStock.get(productId) ??
-            numberValue(productData.quantity, 0);
+            numberValue(
+              inventoryData.quantity,
+              branchContext.branchId === "main"
+                ? numberValue(productData.quantity, 0)
+                : 0,
+            );
           const after = before - item.quantity;
           runningStock.set(productId, after);
 
@@ -390,6 +446,8 @@ export default createHandler(
                 .doc();
               transaction.create(movementRef, {
                 id: movementRef.id,
+                businessId: data.businessId,
+                branchId: branchContext.branchId,
                 productId,
                 productName: item.name,
                 batchId: allocation.batchId,
@@ -412,6 +470,8 @@ export default createHandler(
               .doc();
             transaction.create(movementRef, {
               id: movementRef.id,
+              businessId: data.businessId,
+              branchId: branchContext.branchId,
               productId,
               productName: item.name,
               type: "stock_out",
@@ -478,6 +538,9 @@ export default createHandler(
       transaction.create(saleRef, {
         saleId: data.saleId,
         businessId: data.businessId,
+        branchId: branchContext.branchId,
+        branchNameSnapshot: branchContext.branchName,
+        branchCodeSnapshot: branchContext.branchCode,
         receiptNumber,
         customerId: data.customerId ?? null,
         customerName:
@@ -567,21 +630,57 @@ export default createHandler(
           now,
         });
         const profitDelta = productProfitDelta.get(productId) ?? 0;
+        const inventorySnapshot = inventories.get(productId)!;
+        const inventoryData = inventorySnapshot.data() ?? {};
+        const reservedQuantity = numberValue(
+          inventoryData.reservedQuantity,
+          0,
+        );
+        transaction.set(
+          inventoryRefs.get(productId)!,
+          {
+            businessId: data.businessId,
+            branchId: branchContext.branchId,
+            productId,
+            quantity,
+            reservedQuantity,
+            availableQuantity: Math.max(0, quantity - reservedQuantity),
+            lowStockThreshold: numberValue(
+              inventoryData.lowStockThreshold,
+              numberValue(productData.lowStockThreshold, 0),
+            ),
+            averageUnitCostMinor: numberValue(
+              inventoryData.averageUnitCostMinor,
+              productCostPrice(productData),
+            ),
+            stockCostValueMinor: summary.stockCostValueMinor,
+            expectedStockRevenueMinor: summary.expectedStockRevenueMinor,
+            potentialProfitRemainingMinor:
+              summary.potentialProfitRemainingMinor,
+            expiryStatus: summary.expiryStatus,
+            nextExpiryDate: summary.nextExpiryDate
+              ? dateOnlyTimestamp(summary.nextExpiryDate)
+              : null,
+            nextExpiryBatchId: summary.nextExpiryBatchId,
+            nextExpiryBatchQuantity: summary.nextExpiryBatchQuantity,
+            expiringQuantity: summary.expiringQuantity,
+            expiredQuantity: summary.expiredQuantity,
+            unknownExpiryQuantity: summary.unknownExpiryQuantity,
+            realizedGrossProfitMinor: FieldValue.increment(profitDelta),
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: identity.uid,
+            ...(inventorySnapshot.exists
+              ? {}
+              : {createdAt: FieldValue.serverTimestamp()}),
+          },
+          {merge: true},
+        );
+        const quantitySold = data.items
+          .filter((item) => item.trackStock && item.productId === productId)
+          .reduce((sum, item) => sum + item.quantity, 0);
+        // Compatibility aggregate only.
         transaction.update(productRefs.get(productId)!, {
-          quantity,
-          stockCostValueMinor: summary.stockCostValueMinor,
-          expectedStockRevenueMinor: summary.expectedStockRevenueMinor,
-          potentialProfitRemainingMinor:
-            summary.potentialProfitRemainingMinor,
-          expiryStatus: summary.expiryStatus,
-          nextExpiryDate: summary.nextExpiryDate
-            ? dateOnlyTimestamp(summary.nextExpiryDate)
-            : null,
-          nextExpiryBatchId: summary.nextExpiryBatchId,
-          nextExpiryBatchQuantity: summary.nextExpiryBatchQuantity,
-          expiringQuantity: summary.expiringQuantity,
-          expiredQuantity: summary.expiredQuantity,
-          unknownExpiryQuantity: summary.unknownExpiryQuantity,
+          quantity: FieldValue.increment(-quantitySold),
           realizedGrossProfitMinor: FieldValue.increment(profitDelta),
           updatedAt: FieldValue.serverTimestamp(),
         });
@@ -609,6 +708,7 @@ export default createHandler(
             type: "sale_credit",
             saleId: data.saleId,
             receiptNumber,
+            branchId: branchContext.branchId,
             debitMinor: totals.balanceDueMinor,
             creditMinor: 0,
             balanceBeforeMinor: previousBalance,
@@ -622,6 +722,7 @@ export default createHandler(
       transaction.create(activityRef, {
         activityId: activityRef.id,
         businessId: data.businessId,
+        branchId: branchContext.branchId,
         type: "sale",
         title: "Sale completed",
         subtitle: `Receipt ${receiptNumber}`,
@@ -639,9 +740,12 @@ export default createHandler(
         0,
       );
       transaction.set(
-        businessRef.collection("analytics").doc(`daily_${dateKey}`),
+        businessRef
+          .collection("analytics")
+          .doc(`daily_${dateKey}_${branchContext.branchId}`),
         {
           dateKey,
+          branchId: branchContext.branchId,
           grossSalesMinor: FieldValue.increment(totals.subtotalMinor),
           discountMinor: FieldValue.increment(
             totals.itemDiscountMinor + totals.orderDiscountMinor,

@@ -8,6 +8,11 @@ import {
   calculatePotentialProfit,
   expiryStatusForDate,
 } from "../../../services/inventory/product-intelligence";
+import {
+  assertActiveBranchInTransaction,
+  branchInventoryRef,
+  requireActiveBranchAccess,
+} from "../../../services/inventory/branch-inventory";
 import {requireAppPermission} from "../../../services/team/membership-service";
 import {errors} from "../../../utils/api-errors";
 import {sendSuccess} from "../../../utils/api-response";
@@ -15,6 +20,7 @@ import {createHandler, readJsonBody} from "../../../utils/handler";
 
 const createProductSchema = z.object({
   businessId: businessIdSchema,
+  branchId: z.string().trim().min(1).max(128),
   productId: z.string().uuid(),
   name: z.string().trim().min(2).max(160),
   sku: z.string().trim().max(80).nullish(),
@@ -69,11 +75,18 @@ export default createHandler(
       : null;
 
     const db = adminFirestore();
-    const businessRef = db.collection("businesses").doc(data.businessId);
+    const branchContext = await requireActiveBranchAccess({
+      db,
+      uid: identity.uid,
+      businessId: data.businessId,
+      branchId: data.branchId,
+    });
+    const businessRef = branchContext.businessRef;
     const productRef = businessRef.collection("products").doc(data.productId);
+    const inventoryRef = branchInventoryRef(branchContext, data.productId);
     const batchRef = businessRef
       .collection("inventory_batches")
-      .doc(`${data.productId}_initial`);
+      .doc(`${branchContext.branchId}_${data.productId}_initial`);
     const movementRef = businessRef.collection("inventory_movements").doc();
     const activityRef = businessRef.collection("activity").doc();
 
@@ -82,6 +95,11 @@ export default createHandler(
         transaction.get(productRef),
         transaction.get(businessRef),
       ]);
+      await assertActiveBranchInTransaction({
+        transaction,
+        branchRef: branchContext.branchRef,
+        businessId: data.businessId,
+      });
       if (existing.exists) return false;
       const timezone =
         (business.data()?.timezone as string | undefined) ??
@@ -146,9 +164,39 @@ export default createHandler(
         updatedAt: FieldValue.serverTimestamp(),
       });
 
+      transaction.create(inventoryRef, {
+        businessId: data.businessId,
+        branchId: branchContext.branchId,
+        productId: data.productId,
+        quantity,
+        reservedQuantity: 0,
+        availableQuantity: quantity,
+        lowStockThreshold: data.trackStock ? data.lowStockThreshold : 0,
+        averageUnitCostMinor: data.costPriceMinor,
+        stockCostValueMinor: profit.stockCostValueMinor,
+        expectedStockRevenueMinor: profit.expectedStockRevenueMinor,
+        potentialProfitRemainingMinor: profit.potentialProfitRemainingMinor,
+        realizedGrossProfitMinor: 0,
+        nextExpiryDate: expiryTimestamp,
+        nextExpiryBatchId: expiryDateOnly ? batchRef.id : null,
+        nextExpiryBatchQuantity: expiryDateOnly ? quantity : 0,
+        expiringQuantity:
+          expiryStatus === "expiring_soon" || expiryStatus === "expires_today"
+            ? quantity
+            : 0,
+        expiredQuantity: expiryStatus === "expired" ? quantity : 0,
+        unknownExpiryQuantity:
+          data.tracksExpiry && quantity > 0 && !expiryKnown ? quantity : 0,
+        expiryStatus,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: identity.uid,
+      });
+
       if (data.trackStock && quantity > 0) {
         transaction.create(batchRef, {
           businessId: data.businessId,
+          branchId: branchContext.branchId,
           productId: data.productId,
           productName: data.name,
           sku: data.sku || null,
@@ -171,6 +219,8 @@ export default createHandler(
         });
         transaction.create(movementRef, {
           id: movementRef.id,
+          businessId: data.businessId,
+          branchId: branchContext.branchId,
           productId: data.productId,
           productName: data.name,
           batchId: batchRef.id,
@@ -191,6 +241,7 @@ export default createHandler(
       transaction.create(activityRef, {
         activityId: activityRef.id,
         businessId: data.businessId,
+        branchId: branchContext.branchId,
         type: "productAdded",
         title: "Product added",
         subtitle: data.name,

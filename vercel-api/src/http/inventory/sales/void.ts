@@ -10,14 +10,20 @@ import {
   summarizeInventoryBatches,
   type InventoryBatchSummaryInput,
 } from "../../../services/inventory/purchase-intelligence";
+import {
+  assertActiveBranchInTransaction,
+  branchInventoryRef,
+  requireActiveBranchAccess,
+} from "../../../services/inventory/branch-inventory";
 import {requireAppPermission} from "../../../services/team/membership-service";
 import {errors} from "../../../utils/api-errors";
 import {sendSuccess} from "../../../utils/api-response";
 import {createHandler, readJsonBody} from "../../../utils/handler";
 import {minorToMajor} from "../../../utils/money";
 
-const voidSaleSchema = z.object({
+export const voidSaleSchema = z.object({
   businessId: businessIdSchema,
+  branchId: z.string().trim().min(1).max(128),
   saleId: z.string().trim().min(1).max(128),
   reason: z.string().trim().min(2).max(500),
   voidedByName: z.string().trim().max(160).nullish(),
@@ -29,7 +35,9 @@ export default createHandler(
     const identity = await authenticateRequest(req);
     const parsed = voidSaleSchema.safeParse(readJsonBody(req));
     if (!parsed.success) {
-      throw errors.invalidArgument("Enter a void reason and try again.");
+      throw errors.invalidArgument(
+        "A branch, sale, and void reason are required.",
+      );
     }
     const data = parsed.data;
     await requireAppPermission({
@@ -41,6 +49,29 @@ export default createHandler(
     const db = adminFirestore();
     const businessRef = db.collection("businesses").doc(data.businessId);
     const saleRef = businessRef.collection("sales").doc(data.saleId);
+    const salePreview = await saleRef.get();
+    if (!salePreview.exists) {
+      throw errors.notFound("Sale not found.");
+    }
+    const previewData = salePreview.data() ?? {};
+    const saleBranchId =
+      typeof previewData.branchId === "string" && previewData.branchId.trim()
+        ? previewData.branchId.trim()
+        : null;
+    if (saleBranchId === null) {
+      throw errors.invalidArgument(
+        "This legacy sale must be migrated before it can be voided.",
+      );
+    }
+    if (saleBranchId !== data.branchId) {
+      throw errors.invalidArgument("The sale does not belong to this branch.");
+    }
+    const branchContext = await requireActiveBranchAccess({
+      db,
+      uid: identity.uid,
+      businessId: data.businessId,
+      branchId: data.branchId,
+    });
     const activityRef = businessRef.collection("activity").doc();
     const voidedByName =
       data.voidedByName?.trim() || identity.email || "Team member";
@@ -51,6 +82,11 @@ export default createHandler(
         transaction.get(businessRef),
         transaction.get(saleRef),
       ]);
+      await assertActiveBranchInTransaction({
+        transaction,
+        branchRef: branchContext.branchRef,
+        businessId: data.businessId,
+      });
       if (!businessSnapshot.exists) {
         throw errors.notFound("The selected business no longer exists.");
       }
@@ -59,6 +95,13 @@ export default createHandler(
       }
 
       const saleData = saleSnapshot.data() ?? {};
+      const storedBranchId =
+        typeof saleData.branchId === "string" && saleData.branchId.trim()
+          ? saleData.branchId.trim()
+          : null;
+      if (storedBranchId !== branchContext.branchId) {
+        throw errors.invalidArgument("The sale branch changed. Refresh and try again.");
+      }
       const status = String(saleData.saleStatus ?? saleData.status ?? "");
       const receiptNumber =
         (saleData.receiptNumber as string | undefined) ?? data.saleId;
@@ -66,6 +109,7 @@ export default createHandler(
         return {
           saleId: data.saleId,
           receiptNumber,
+          branchId: branchContext.branchId,
           voided: true,
           alreadyVoided: true,
         };
@@ -97,12 +141,19 @@ export default createHandler(
           businessRef.collection("products").doc(productId),
         ]),
       );
+      const inventoryRefs = new Map(
+        productIds.map((productId) => [
+          productId,
+          branchInventoryRef(branchContext, productId),
+        ]),
+      );
       const batchQueries = new Map(
         productIds.map((productId) => [
           productId,
           businessRef
             .collection("inventory_batches")
-            .where("productId", "==", productId),
+            .where("productId", "==", productId)
+            .where("branchId", "==", branchContext.branchId),
         ]),
       );
 
@@ -114,12 +165,17 @@ export default createHandler(
         ? businessRef.collection("customers").doc(customerId)
         : null;
 
-      const [customerSnapshot, productResults, batchResults] =
+      const [customerSnapshot, productResults, inventoryResults, batchResults] =
         await Promise.all([
           customerRef ? transaction.get(customerRef) : Promise.resolve(null),
           Promise.all(
             productIds.map((productId) =>
               transaction.get(productRefs.get(productId)!),
+            ),
+          ),
+          Promise.all(
+            productIds.map((productId) =>
+              transaction.get(inventoryRefs.get(productId)!),
             ),
           ),
           Promise.all(
@@ -133,6 +189,12 @@ export default createHandler(
         productIds.map((productId, index) => [
           productId,
           productResults[index],
+        ]),
+      );
+      const inventories = new Map(
+        productIds.map((productId, index) => [
+          productId,
+          inventoryResults[index],
         ]),
       );
       const batchesByProduct = new Map(
@@ -204,8 +266,15 @@ export default createHandler(
         const product = products.get(productId);
         if (!product?.exists) continue;
         const productData = product.data() ?? {};
+        const inventoryData = inventories.get(productId)?.data() ?? {};
         const before =
-          runningStock.get(productId) ?? numberValue(productData.quantity, 0);
+          runningStock.get(productId) ??
+          numberValue(
+            inventoryData.quantity,
+            branchContext.branchId === "main"
+              ? numberValue(productData.quantity, 0)
+              : 0,
+          );
         const reminderThresholdDays = numberValue(
           productData.defaultExpiryReminderDays,
           30,
@@ -264,6 +333,8 @@ export default createHandler(
             .doc();
           transaction.create(movementRef, {
             id: movementRef.id,
+            businessId: data.businessId,
+            branchId: branchContext.branchId,
             productId,
             productName: (item.name as string | undefined) ?? "Item",
             type: "stock_in",
@@ -363,21 +434,58 @@ export default createHandler(
           now,
         });
         const profitDelta = productProfitDelta.get(productId) ?? 0;
+        const inventorySnapshot = inventories.get(productId)!;
+        const inventoryData = inventorySnapshot.data() ?? {};
+        const reservedQuantity = numberValue(
+          inventoryData.reservedQuantity,
+          0,
+        );
+        transaction.set(
+          inventoryRefs.get(productId)!,
+          {
+            businessId: data.businessId,
+            branchId: branchContext.branchId,
+            productId,
+            quantity,
+            reservedQuantity,
+            availableQuantity: Math.max(0, quantity - reservedQuantity),
+            lowStockThreshold: numberValue(
+              inventoryData.lowStockThreshold,
+              numberValue(productData.lowStockThreshold, 0),
+            ),
+            averageUnitCostMinor: numberValue(
+              inventoryData.averageUnitCostMinor,
+              productCostPrice(productData),
+            ),
+            stockCostValueMinor: summary.stockCostValueMinor,
+            expectedStockRevenueMinor: summary.expectedStockRevenueMinor,
+            potentialProfitRemainingMinor:
+              summary.potentialProfitRemainingMinor,
+            expiryStatus: summary.expiryStatus,
+            nextExpiryDate: summary.nextExpiryDate
+              ? dateOnlyTimestamp(summary.nextExpiryDate)
+              : null,
+            nextExpiryBatchId: summary.nextExpiryBatchId,
+            nextExpiryBatchQuantity: summary.nextExpiryBatchQuantity,
+            expiringQuantity: summary.expiringQuantity,
+            expiredQuantity: summary.expiredQuantity,
+            unknownExpiryQuantity: summary.unknownExpiryQuantity,
+            realizedGrossProfitMinor: FieldValue.increment(-profitDelta),
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: identity.uid,
+          },
+          {merge: true},
+        );
+        const quantityRestored = items
+          .filter(
+            (item) =>
+              item.trackStock === true &&
+              typeof item.productId === "string" &&
+              item.productId.trim() === productId,
+          )
+          .reduce((sum, item) => sum + numberValue(item.quantity, 0), 0);
         transaction.update(productRefs.get(productId)!, {
-          quantity,
-          stockCostValueMinor: summary.stockCostValueMinor,
-          expectedStockRevenueMinor: summary.expectedStockRevenueMinor,
-          potentialProfitRemainingMinor:
-            summary.potentialProfitRemainingMinor,
-          expiryStatus: summary.expiryStatus,
-          nextExpiryDate: summary.nextExpiryDate
-            ? dateOnlyTimestamp(summary.nextExpiryDate)
-            : null,
-          nextExpiryBatchId: summary.nextExpiryBatchId,
-          nextExpiryBatchQuantity: summary.nextExpiryBatchQuantity,
-          expiringQuantity: summary.expiringQuantity,
-          expiredQuantity: summary.expiredQuantity,
-          unknownExpiryQuantity: summary.unknownExpiryQuantity,
+          quantity: FieldValue.increment(quantityRestored),
           realizedGrossProfitMinor: FieldValue.increment(-profitDelta),
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: identity.uid,
@@ -405,6 +513,7 @@ export default createHandler(
           type: "sale_void",
           saleId: data.saleId,
           receiptNumber,
+          branchId: branchContext.branchId,
           debitMinor: 0,
           creditMinor: balanceDueMinor,
           balanceBeforeMinor: previousBalance,
@@ -426,6 +535,7 @@ export default createHandler(
       transaction.create(activityRef, {
         activityId: activityRef.id,
         businessId: data.businessId,
+        branchId: branchContext.branchId,
         type: "sale_void",
         title: "Sale voided",
         subtitle: `Receipt ${receiptNumber} · ${data.reason}`,
@@ -439,9 +549,12 @@ export default createHandler(
       });
 
       transaction.set(
-        businessRef.collection("analytics").doc(`daily_${dateKey}`),
+        businessRef
+          .collection("analytics")
+          .doc(`daily_${dateKey}_${branchContext.branchId}`),
         {
           dateKey,
+          branchId: branchContext.branchId,
           grossSalesMinor: FieldValue.increment(-subtotalMinor),
           discountMinor: FieldValue.increment(-discountMinor),
           taxMinor: FieldValue.increment(-taxMinor),
