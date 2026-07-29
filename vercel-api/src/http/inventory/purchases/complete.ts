@@ -16,6 +16,7 @@ import {
   assertActiveBranchInTransaction,
   branchInventoryRef,
   requireActiveBranchAccess,
+  requireBranchIdInBody,
 } from "../../../services/inventory/branch-inventory";
 import {requireAppPermission} from "../../../services/team/membership-service";
 import {errors} from "../../../utils/api-errors";
@@ -50,11 +51,13 @@ const purchaseItemSchema = z.object({
   expiryDateKnown: z.boolean().default(false),
 });
 
-const completePurchaseSchema = z
+export const completePurchaseSchema = z
   .object({
     purchaseId: z.string().uuid(),
     businessId: businessIdSchema,
     branchId: z.string().trim().min(1).max(128),
+    branchNameSnapshot: z.string().trim().min(1).max(160),
+    branchCodeSnapshot: z.string().trim().min(2).max(12),
     supplierId: z.string().trim().min(1).max(128),
     supplierName: z.string().trim().min(1).max(160),
     items: z.array(purchaseItemSchema).min(1).max(200),
@@ -85,7 +88,9 @@ export default createHandler(
   ["POST"],
   async (req: VercelRequest, res: VercelResponse) => {
     const identity = await authenticateRequest(req);
-    const parsed = completePurchaseSchema.safeParse(readJsonBody(req));
+    const body = readJsonBody(req);
+    requireBranchIdInBody(body);
+    const parsed = completePurchaseSchema.safeParse(body);
     if (!parsed.success) {
       throw errors.invalidArgument("Check the purchase details and try again.");
     }
@@ -147,10 +152,24 @@ export default createHandler(
         businessId: data.businessId,
       });
       if (existingPurchase.exists) {
+        const existing = existingPurchase.data() ?? {};
+        if (existing.branchId !== branchContext.branchId) {
+          throw errors.invalidArgument(
+            "This purchase ID already belongs to another branch.",
+          );
+        }
         return {
           purchaseId: data.purchaseId,
+          businessId: data.businessId,
+          branchId: branchContext.branchId,
+          branchNameSnapshot:
+            (existing.branchNameSnapshot as string | undefined) ??
+            branchContext.branchName,
+          branchCodeSnapshot:
+            (existing.branchCodeSnapshot as string | undefined) ??
+            branchContext.branchCode,
           purchaseNumber:
-            (existingPurchase.data()?.purchaseNumber as string | undefined) ??
+            (existing.purchaseNumber as string | undefined) ??
             data.purchaseId,
           created: false,
         };
@@ -363,6 +382,8 @@ export default createHandler(
         purchaseId: data.purchaseId,
         businessId: data.businessId,
         branchId: branchContext.branchId,
+        branchNameSnapshot: branchContext.branchName,
+        branchCodeSnapshot: branchContext.branchCode,
         purchaseNumber,
         supplierId: data.supplierId,
         supplierName: data.supplierName,
@@ -548,7 +569,7 @@ export default createHandler(
           .filter((item) => item.trackStock)
           .reduce((sum, item) => sum + item.quantity, 0);
         transaction.update(productRefs.get(productId)!, {
-          ...(quantityAdded > 0
+          ...(quantityAdded > 0 && branchContext.branchId === "main"
             ? {quantity: FieldValue.increment(quantityAdded)}
             : {}),
           costPriceMinor: newCost,
@@ -614,7 +635,15 @@ export default createHandler(
         {merge: true},
       );
 
-      return {purchaseId: data.purchaseId, purchaseNumber, created: true};
+      return {
+        purchaseId: data.purchaseId,
+        businessId: data.businessId,
+        branchId: branchContext.branchId,
+        branchNameSnapshot: branchContext.branchName,
+        branchCodeSnapshot: branchContext.branchCode,
+        purchaseNumber,
+        created: true,
+      };
     });
 
     sendSuccess(res, result);

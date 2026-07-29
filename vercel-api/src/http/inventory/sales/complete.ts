@@ -20,6 +20,7 @@ import {
   assertActiveBranchInTransaction,
   branchInventoryRef,
   requireActiveBranchAccess,
+  requireBranchIdInBody,
 } from "../../../services/inventory/branch-inventory";
 import {requireAppPermission} from "../../../services/team/membership-service";
 import {errors} from "../../../utils/api-errors";
@@ -54,7 +55,7 @@ const saleItemSchema = z.object({
   discountValue: z.number().finite().default(0),
 });
 
-const completeSaleSchema = z
+export const completeSaleSchema = z
   .object({
     saleId: z.string().uuid(),
     businessId: businessIdSchema,
@@ -113,7 +114,9 @@ export default createHandler(
   ["POST"],
   async (req: VercelRequest, res: VercelResponse) => {
     const identity = await authenticateRequest(req);
-    const parsed = completeSaleSchema.safeParse(readJsonBody(req));
+    const body = readJsonBody(req);
+    requireBranchIdInBody(body);
+    const parsed = completeSaleSchema.safeParse(body);
     if (!parsed.success) {
       throw errors.invalidArgument("Check the sale details and try again.");
     }
@@ -172,8 +175,21 @@ export default createHandler(
       });
       if (existingSale.exists) {
         const existing = existingSale.data() ?? {};
+        if (existing.branchId !== branchContext.branchId) {
+          throw errors.invalidArgument(
+            "This sale ID already belongs to another branch.",
+          );
+        }
         return {
           saleId: data.saleId,
+          businessId: data.businessId,
+          branchId: branchContext.branchId,
+          branchNameSnapshot:
+            (existing.branchNameSnapshot as string | undefined) ??
+            branchContext.branchName,
+          branchCodeSnapshot:
+            (existing.branchCodeSnapshot as string | undefined) ??
+            branchContext.branchCode,
           receiptNumber:
             (existing.receiptNumber as string | undefined) ?? data.saleId,
           totalMinor: numberValue(existing.totalMinor, totals.totalMinor),
@@ -680,7 +696,9 @@ export default createHandler(
           .reduce((sum, item) => sum + item.quantity, 0);
         // Compatibility aggregate only.
         transaction.update(productRefs.get(productId)!, {
-          quantity: FieldValue.increment(-quantitySold),
+          ...(branchContext.branchId === "main"
+            ? {quantity: FieldValue.increment(-quantitySold)}
+            : {}),
           realizedGrossProfitMinor: FieldValue.increment(profitDelta),
           updatedAt: FieldValue.serverTimestamp(),
         });
@@ -765,6 +783,10 @@ export default createHandler(
 
       return {
         saleId: data.saleId,
+        businessId: data.businessId,
+        branchId: branchContext.branchId,
+        branchNameSnapshot: branchContext.branchName,
+        branchCodeSnapshot: branchContext.branchCode,
         receiptNumber,
         totalMinor: totals.totalMinor,
         amountPaidMinor: totals.amountPaidMinor,

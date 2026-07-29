@@ -2,6 +2,7 @@ export type ApiErrorCode =
   | "unauthenticated"
   | "permission_denied"
   | "invalid_argument"
+  | "branch_required"
   | "rate_limited"
   | "not_found"
   | "method_not_allowed"
@@ -28,6 +29,8 @@ export const errors = {
   ) => new ApiError("permission_denied", message, 403),
   invalidArgument: (message = "The information entered is invalid.") =>
     new ApiError("invalid_argument", message, 400),
+  branchRequired: (message = "Select an active branch and try again.") =>
+    new ApiError("branch_required", message, 400),
   rateLimited: (
     message = "Sabi has received too many requests. Please wait and try again.",
   ) => new ApiError("rate_limited", message, 429),

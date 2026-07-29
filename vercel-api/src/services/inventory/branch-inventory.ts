@@ -122,6 +122,18 @@ export function normalizeWritableBranchId(value: string): string {
   return branchId;
 }
 
+export function requireBranchIdInBody(body: unknown): void {
+  const branchId =
+    typeof body === "object" &&
+    body !== null &&
+    typeof (body as Record<string, unknown>).branchId === "string"
+      ? (body as Record<string, string>).branchId.trim()
+      : "";
+  if (!branchId) {
+    throw errors.branchRequired();
+  }
+}
+
 export function inventoryNumber(
   data: Record<string, unknown> | undefined,
   field: string,
