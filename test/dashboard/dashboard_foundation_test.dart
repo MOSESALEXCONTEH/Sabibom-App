@@ -1,17 +1,28 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sabibom/core/formatting/currency_formatter.dart';
 import 'package:sabibom/core/formatting/date_range_utils.dart';
 import 'package:sabibom/features/dashboard/application/dashboard_providers.dart';
 import 'package:sabibom/features/dashboard/domain/dashboard_models.dart';
-import 'package:sabibom/features/dashboard/presentation/dashboard_screen.dart' as dashboard;
+import 'package:sabibom/features/dashboard/presentation/dashboard_screen.dart'
+    as dashboard;
 
 void main() {
   group('dashboard greeting', () {
     test('uses time-based greeting and first name', () {
-      expect(dashboard.dashboardGreeting(DateTime(2026, 7, 17, 9), 'Amara Conteh'), 'Good morning, Amara');
-      expect(dashboard.dashboardGreeting(DateTime(2026, 7, 17, 14), 'Amara Conteh'), 'Good afternoon, Amara');
-      expect(dashboard.dashboardGreeting(DateTime(2026, 7, 17, 18), null), 'Good evening');
+      expect(
+        dashboard.dashboardGreeting(DateTime(2026, 7, 17, 9), 'Amara Conteh'),
+        'Good morning, Amara',
+      );
+      expect(
+        dashboard.dashboardGreeting(DateTime(2026, 7, 17, 14), 'Amara Conteh'),
+        'Good afternoon, Amara',
+      );
+      expect(
+        dashboard.dashboardGreeting(DateTime(2026, 7, 17, 18), null),
+        'Good evening',
+      );
     });
   });
 
@@ -28,21 +39,39 @@ void main() {
 
   group('dashboard date ranges', () {
     test('today starts at local midnight and ends next midnight', () {
-      final range = dashboardDateRange(DashboardPeriod.today, now: DateTime(2026, 7, 17, 15, 30));
+      final range = dashboardDateRange(
+        DashboardPeriod.today,
+        now: DateTime(2026, 7, 17, 15, 30),
+      );
       expect(range.start, DateTime(2026, 7, 17));
       expect(range.end, DateTime(2026, 7, 18));
     });
 
     test('week begins on Monday', () {
-      final range = dashboardDateRange(DashboardPeriod.week, now: DateTime(2026, 7, 19));
+      final range = dashboardDateRange(
+        DashboardPeriod.week,
+        now: DateTime(2026, 7, 19),
+      );
       expect(range.start, DateTime(2026, 7, 13));
       expect(range.end, DateTime(2026, 7, 20));
     });
 
     test('month uses first day boundaries', () {
-      final range = dashboardDateRange(DashboardPeriod.month, now: DateTime(2026, 7, 17));
+      final range = dashboardDateRange(
+        DashboardPeriod.month,
+        now: DateTime(2026, 7, 17),
+      );
       expect(range.start, DateTime(2026, 7));
       expect(range.end, DateTime(2026, 8));
+    });
+
+    test('year uses calendar year boundaries', () {
+      final range = dashboardDateRange(
+        DashboardPeriod.year,
+        now: DateTime(2026, 8, 3, 14),
+      );
+      expect(range.start, DateTime(2026));
+      expect(range.end, DateTime(2027));
     });
   });
 
@@ -73,17 +102,26 @@ void main() {
       await tester.binding.setSurfaceSize(size);
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
-        MaterialApp(
-          home: MediaQuery(
-            data: MediaQueryData(size: size, textScaler: TextScaler.linear(textScale)),
-            child: Scaffold(body: Padding(padding: const EdgeInsets.all(16), child: child)),
+        ProviderScope(
+          child: MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(
+                size: size,
+                textScaler: TextScaler.linear(textScale),
+              ),
+              child: Scaffold(
+                body: Padding(padding: const EdgeInsets.all(16), child: child),
+              ),
+            ),
           ),
         ),
       );
       await tester.pump();
     }
 
-    testWidgets('DashboardHeader fits on small and regular phone widths', (tester) async {
+    testWidgets('DashboardHeader fits on small and regular phone widths', (
+      tester,
+    ) async {
       for (final size in <Size>[const Size(360, 800), const Size(412, 915)]) {
         await pumpDashboardWidget(
           tester,
@@ -112,7 +150,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('DashboardMetricGrid fits all cards at normal and large text', (tester) async {
+    testWidgets('DashboardMetricGrid fits all cards at normal and large text', (
+      tester,
+    ) async {
       final summary = DashboardSummary.empty(
         DateRange(start: DateTime(2026, 7, 17), end: DateTime(2026, 7, 18)),
       );

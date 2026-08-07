@@ -1,5 +1,6 @@
-import 'dart:typed_data';
+import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -17,6 +18,70 @@ class ReceiptPdfService {
     : _http = httpClient ?? http.Client();
 
   final http.Client _http;
+  static const Map<ReceiptShadingStyle, String> _shadingAssets =
+      <ReceiptShadingStyle, String>{
+        ReceiptShadingStyle.softWave: 'assets/Shading background/1.png',
+        ReceiptShadingStyle.darkMesh: 'assets/Shading background/2.png',
+        ReceiptShadingStyle.cornerGlow: 'assets/Shading background/3.png',
+        ReceiptShadingStyle.auroraMist: 'assets/Shading background/4.png',
+        ReceiptShadingStyle.diagonalSweep: 'assets/Shading background/5.png',
+        ReceiptShadingStyle.sunsetBloom: 'assets/Shading background/6.png',
+        ReceiptShadingStyle.paperTexture: 'assets/Shading background/7.png',
+      };
+
+  Future<Uint8List?> _safeShadingAssetBytes(ReceiptShadingStyle style) async {
+    final path = _shadingAssets[style];
+    if (path == null) return null;
+    try {
+      final data = await rootBundle.load(path);
+      return data.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _safeShadingNetworkBytes(String url) async {
+    try {
+      final response = await _http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          response.bodyBytes.isNotEmpty) {
+        return response.bodyBytes;
+      }
+    } catch (_) {
+      // Fall through to built-in asset fallback.
+    }
+    return null;
+  }
+
+  Future<Uint8List?> _safeShadingBytes(ReceiptTemplate layout) async {
+    final remoteUrl = layout.shadingImageUrl?.trim();
+    if (remoteUrl != null && remoteUrl.isNotEmpty) {
+      final fromNetwork = await _safeShadingNetworkBytes(remoteUrl);
+      if (fromNetwork != null) return fromNetwork;
+    }
+    return _safeShadingAssetBytes(layout.shadingStyle);
+  }
+
+  Future<Uint8List?> _safeLogoBytes({String? url, String? cid}) async {
+    for (final candidate in IpfsUrl.candidates(url: url, cid: cid)) {
+      try {
+        final response = await _http
+            .get(Uri.parse(candidate))
+            .timeout(const Duration(seconds: 8));
+        if (response.statusCode >= 200 &&
+            response.statusCode < 300 &&
+            response.bodyBytes.isNotEmpty) {
+          return response.bodyBytes;
+        }
+      } catch (_) {
+        // A receipt should still render when a remote logo is unavailable.
+      }
+    }
+    return null;
+  }
 
   Future<Uint8List> buildPdf({
     required Sale sale,
@@ -28,6 +93,7 @@ class ReceiptPdfService {
     final layout = templateSnapshot == null || templateSnapshot.isEmpty
         ? template
         : ReceiptTemplate.fromSnapshot(business.businessId, templateSnapshot);
+    final shadingBytes = await _safeShadingBytes(layout);
 
     final logoBytes = await _safeLogoBytes(
       url: (templateSnapshot?['logoUrl'] as String?) ?? business.logoUrl,
@@ -51,8 +117,8 @@ class ReceiptPdfService {
       business: business,
       layout: layout,
       logoBytes: logoBytes,
-      primary: _color(layout.primaryColor),
-      secondary: _color(layout.secondaryColor),
+      primary: _applyAlpha(_color(layout.primaryColor), layout.accentAlpha),
+      secondary: _applyAlpha(_color(layout.secondaryColor), layout.accentAlpha),
       text: _color(layout.textColor),
       background: _color(layout.backgroundColor),
       businessName: businessName,
@@ -61,6 +127,7 @@ class ReceiptPdfService {
       businessTagline: businessTagline,
       businessEmail: business.email,
       businessWebsite: business.website,
+      shadingBytes: shadingBytes,
     );
 
     final pageFormat = switch (layout.paperSize) {
@@ -103,9 +170,14 @@ class ReceiptPdfService {
           buildBackground: hasBackground
               ? (context) => pw.FullPage(
                   ignoreMargins: true,
-                  child: pw.Container(color: ctx.background),
+                  child: pw.Stack(
+                    children: <pw.Widget>[
+                      pw.Container(color: ctx.background),
+                      _buildShadingOverlay(ctx),
+                    ],
+                  ),
                 )
-              : null,
+              : (context) => _buildShadingOverlay(ctx),
         ),
         build: (context) => _buildForType(ctx),
       ),
@@ -972,6 +1044,184 @@ class ReceiptPdfService {
     );
   }
 
+  PdfColor _applyAlpha(PdfColor color, double alpha) {
+    final a = alpha.clamp(0.2, 1.0);
+    return PdfColor(
+      1 - (1 - color.red) * a,
+      1 - (1 - color.green) * a,
+      1 - (1 - color.blue) * a,
+    );
+  }
+
+  pw.Widget _buildShadingOverlay(_ReceiptRenderContext ctx) {
+    if (ctx.layout.shadingStyle != ReceiptShadingStyle.none &&
+        ctx.shadingBytes != null) {
+      return pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Opacity(
+          opacity: 0.24,
+          child: pw.Image(pw.MemoryImage(ctx.shadingBytes!), fit: pw.BoxFit.cover),
+        ),
+      );
+    }
+
+    return switch (ctx.layout.shadingStyle) {
+      ReceiptShadingStyle.none => pw.SizedBox(),
+      ReceiptShadingStyle.softWave => pw.Align(
+        alignment: pw.Alignment.centerLeft,
+        child: pw.Container(
+          width: 68,
+          margin: const pw.EdgeInsets.symmetric(vertical: 16),
+          decoration: pw.BoxDecoration(
+            gradient: pw.LinearGradient(
+              begin: pw.Alignment.topCenter,
+              end: pw.Alignment.bottomCenter,
+              colors: <PdfColor>[
+                _tint(ctx.primary, 0.23),
+                _tint(ctx.secondary, 0.2),
+                _tint(ctx.primary, 0.12),
+              ],
+            ),
+            borderRadius: pw.BorderRadius.circular(36),
+          ),
+        ),
+      ),
+      ReceiptShadingStyle.cornerGlow => pw.Align(
+        alignment: pw.Alignment.topRight,
+        child: pw.Container(
+          width: 180,
+          height: 180,
+          decoration: pw.BoxDecoration(
+            gradient: pw.RadialGradient(
+              center: pw.Alignment.center,
+              radius: 1,
+              colors: <PdfColor>[ctx.primary, PdfColor(1, 1, 1, 0)],
+              stops: const <double>[0, 1],
+            ),
+          ),
+        ),
+      ),
+      ReceiptShadingStyle.darkMesh => pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Container(
+          decoration: pw.BoxDecoration(
+            gradient: pw.LinearGradient(
+              begin: pw.Alignment.topLeft,
+              end: pw.Alignment.bottomRight,
+              colors: <PdfColor>[
+                _tint(ctx.primary, 0.22),
+                PdfColor(1, 1, 1, 0),
+                _tint(ctx.secondary, 0.2),
+              ],
+              stops: const <double>[0, 0.55, 1],
+            ),
+          ),
+        ),
+      ),
+      ReceiptShadingStyle.auroraMist => pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Stack(
+          children: <pw.Widget>[
+            pw.Align(
+              alignment: const pw.Alignment(-1.15, -0.45),
+              child: pw.Container(
+                width: 240,
+                height: 240,
+                decoration: pw.BoxDecoration(
+                  gradient: pw.RadialGradient(
+                    colors: <PdfColor>[ctx.primary, PdfColor(1, 1, 1, 0)],
+                    stops: const <double>[0, 1],
+                  ),
+                ),
+              ),
+            ),
+            pw.Align(
+              alignment: const pw.Alignment(1.12, 0.45),
+              child: pw.Container(
+                width: 280,
+                height: 280,
+                decoration: pw.BoxDecoration(
+                  gradient: pw.RadialGradient(
+                    colors: <PdfColor>[ctx.secondary, PdfColor(1, 1, 1, 0)],
+                    stops: const <double>[0, 1],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      ReceiptShadingStyle.diagonalSweep => pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Container(
+          decoration: pw.BoxDecoration(
+            gradient: pw.LinearGradient(
+              begin: const pw.Alignment(-1, -1),
+              end: const pw.Alignment(1, 1),
+              colors: <PdfColor>[
+                _tint(ctx.primary, 0.2),
+                PdfColor(1, 1, 1, 0),
+                _tint(ctx.secondary, 0.18),
+              ],
+              stops: const <double>[0.08, 0.5, 0.92],
+            ),
+          ),
+        ),
+      ),
+      ReceiptShadingStyle.sunsetBloom => pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Align(
+          alignment: const pw.Alignment(-0.1, -1),
+          child: pw.Container(
+            width: 460,
+            height: 320,
+            decoration: pw.BoxDecoration(
+              gradient: pw.RadialGradient(
+                colors: <PdfColor>[
+                  _tint(ctx.secondary, 0.28),
+                  _tint(ctx.primary, 0.14),
+                  PdfColor(1, 1, 1, 0),
+                ],
+                stops: const <double>[0, 0.45, 1],
+              ),
+            ),
+          ),
+        ),
+      ),
+      ReceiptShadingStyle.paperTexture => pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Stack(
+          children: <pw.Widget>[
+            pw.Container(color: _tint(ctx.secondary, 0.08)),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(24),
+              child: pw.Column(
+                children: List<pw.Widget>.generate(
+                  28,
+                  (index) => pw.Expanded(
+                    child: pw.Container(
+                      width: double.infinity,
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border(
+                          bottom: pw.BorderSide(
+                            color: index.isEven
+                                ? _tint(ctx.primary, 0.2)
+                                : _tint(ctx.secondary, 0.15),
+                            width: 0.25,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    };
+  }
+
   /// Row of small dots used as a decorative divider.
   pw.Widget _dotDivider(_ReceiptRenderContext ctx) {
     return pw.Padding(
@@ -1003,6 +1253,7 @@ class ReceiptPdfService {
       ReceiptLogoSize.small => size * 0.7,
       ReceiptLogoSize.medium => size,
       ReceiptLogoSize.large => size * 1.35,
+      ReceiptLogoSize.xlarge => size * 1.7,
     };
     final image = pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain);
     final logoBox = switch (ctx.layout.logoShape) {
@@ -1054,7 +1305,9 @@ class ReceiptPdfService {
             ctx.businessName,
             textAlign: align,
             style: pw.TextStyle(
-              fontSize: small ? 12 : 16,
+              fontSize: small
+                  ? ctx.layout.businessNameFontSize - 4
+                  : ctx.layout.businessNameFontSize,
               fontWeight: pw.FontWeight.bold,
               color: ctx.primary,
             ),
@@ -1073,7 +1326,9 @@ class ReceiptPdfService {
   }) {
     final align = centered ? pw.TextAlign.center : pw.TextAlign.left;
     final style = pw.TextStyle(
-      fontSize: small ? 8 : 10,
+      fontSize: small
+          ? (ctx.layout.bodyFontSize - 2).clamp(7, 16)
+          : ctx.layout.bodyFontSize,
       color: color ?? ctx.text,
     );
     final cross = centered
@@ -1125,7 +1380,7 @@ class ReceiptPdfService {
             ctx.businessName,
             style: pw.TextStyle(
               color: PdfColors.white,
-              fontSize: 18,
+              fontSize: ctx.layout.businessNameFontSize,
               fontWeight: pw.FontWeight.bold,
             ),
           ),
@@ -1237,7 +1492,12 @@ class ReceiptPdfService {
     bool small = false,
   }) {
     final align = centered ? pw.TextAlign.center : pw.TextAlign.left;
-    final style = pw.TextStyle(fontSize: small ? 8 : 10, color: ctx.text);
+    final style = pw.TextStyle(
+      fontSize: small
+          ? (ctx.layout.bodyFontSize - 2).clamp(7, 16)
+          : ctx.layout.bodyFontSize,
+      color: ctx.text,
+    );
     return pw.Column(
       crossAxisAlignment: centered
           ? pw.CrossAxisAlignment.center
@@ -1271,7 +1531,7 @@ class ReceiptPdfService {
     final headerStyle = pw.TextStyle(
       color: headerColor,
       fontWeight: pw.FontWeight.bold,
-      fontSize: 10,
+      fontSize: (ctx.layout.bodyFontSize - 1).clamp(8, 16),
     );
     final header = pw.Container(
       padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
@@ -1337,7 +1597,10 @@ class ReceiptPdfService {
               flex: 5,
               child: pw.Text(
                 name,
-                style: pw.TextStyle(fontSize: 10, color: ctx.text),
+                style: pw.TextStyle(
+                  fontSize: ctx.layout.bodyFontSize,
+                  color: ctx.text,
+                ),
               ),
             ),
             pw.Expanded(
@@ -1349,7 +1612,10 @@ class ReceiptPdfService {
                   quantityInput: item.quantityInput,
                 ),
                 textAlign: pw.TextAlign.right,
-                style: pw.TextStyle(fontSize: 10, color: ctx.text),
+                style: pw.TextStyle(
+                  fontSize: ctx.layout.bodyFontSize,
+                  color: ctx.text,
+                ),
               ),
             ),
             if (ctx.layout.showUnitPrice)
@@ -1361,7 +1627,10 @@ class ReceiptPdfService {
                     unitPriceInput: item.unitPriceInput,
                   ),
                   textAlign: pw.TextAlign.right,
-                  style: pw.TextStyle(fontSize: 10, color: ctx.text),
+                  style: pw.TextStyle(
+                    fontSize: ctx.layout.bodyFontSize,
+                    color: ctx.text,
+                  ),
                 ),
               ),
             pw.Expanded(
@@ -1369,7 +1638,10 @@ class ReceiptPdfService {
               child: pw.Text(
                 _money(item.lineTotalMinor, ctx.business),
                 textAlign: pw.TextAlign.right,
-                style: pw.TextStyle(fontSize: 10, color: ctx.text),
+                style: pw.TextStyle(
+                  fontSize: ctx.layout.bodyFontSize,
+                  color: ctx.text,
+                ),
               ),
             ),
           ],
@@ -1382,7 +1654,11 @@ class ReceiptPdfService {
 
   /// Simple one-line-per-item list, used by narrow/simple designs.
   pw.Widget _simpleItemLines(_ReceiptRenderContext ctx, {bool small = false}) {
-    final size = small ? 8.0 : 10.0;
+    final size =
+        (small
+                ? (ctx.layout.bodyFontSize - 2).clamp(7, 16)
+                : ctx.layout.bodyFontSize)
+            .toDouble();
     return pw.Column(
       children: ctx.sale.items.map((item) {
         final skuPart = ctx.layout.showSku && item.sku != null
@@ -1425,6 +1701,7 @@ class ReceiptPdfService {
             -ctx.sale.discountMinor,
             ctx.business,
             ctx.text,
+            baseSize: ctx.layout.bodyFontSize,
             small: small,
           ),
         if (ctx.layout.showTax && ctx.sale.taxMinor > 0)
@@ -1433,6 +1710,7 @@ class ReceiptPdfService {
             ctx.sale.taxMinor,
             ctx.business,
             ctx.text,
+            baseSize: ctx.layout.bodyFontSize,
             small: small,
           ),
         if (!skipTotal)
@@ -1442,6 +1720,7 @@ class ReceiptPdfService {
             ctx.business,
             ctx.primary,
             bold: true,
+            baseSize: ctx.layout.totalFontSize,
             small: small,
           ),
         if (ctx.layout.showPaymentDetails) ...<pw.Widget>[
@@ -1450,6 +1729,7 @@ class ReceiptPdfService {
             ctx.sale.amountPaidMinor,
             ctx.business,
             ctx.text,
+            baseSize: ctx.layout.bodyFontSize,
             small: small,
           ),
           if (ctx.sale.changeMinor > 0)
@@ -1458,6 +1738,7 @@ class ReceiptPdfService {
               ctx.sale.changeMinor,
               ctx.business,
               ctx.text,
+              baseSize: ctx.layout.bodyFontSize,
               small: small,
             ),
           if (ctx.sale.balanceDueMinor > 0)
@@ -1466,6 +1747,7 @@ class ReceiptPdfService {
               ctx.sale.balanceDueMinor,
               ctx.business,
               ctx.text,
+              baseSize: ctx.layout.bodyFontSize,
               small: small,
             ),
         ],
@@ -1474,7 +1756,11 @@ class ReceiptPdfService {
   }
 
   pw.Widget _paymentAndNotes(_ReceiptRenderContext ctx, {bool small = false}) {
-    final size = small ? 8.0 : 10.0;
+    final size =
+        (small
+                ? (ctx.layout.bodyFontSize - 2).clamp(7, 16)
+                : ctx.layout.bodyFontSize)
+            .toDouble();
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: <pw.Widget>[
@@ -1513,6 +1799,27 @@ class ReceiptPdfService {
   }
 
   pw.Widget _signatureRow(_ReceiptRenderContext ctx) {
+    final signatureScale = ctx.layout.signatureScale.clamp(0.7, 1.8);
+    if (ctx.layout.signatureMode != ReceiptSignatureMode.placeholder &&
+        (ctx.layout.signatureImageBase64?.trim().isNotEmpty ?? false)) {
+      try {
+        final bytes = base64Decode(ctx.layout.signatureImageBase64!.trim());
+        return pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 18),
+          child: pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.SizedBox(
+              width: 170 * signatureScale,
+              height: 52 * signatureScale,
+              child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
+            ),
+          ),
+        );
+      } catch (_) {
+        // Fall back to signature lines when stored payload is invalid.
+      }
+    }
+
     pw.Widget line(String label) => pw.Container(
       width: 160,
       decoration: const pw.BoxDecoration(
@@ -1533,6 +1840,33 @@ class ReceiptPdfService {
     );
   }
 
+  pw.Widget _paidStamp(_ReceiptRenderContext ctx) {
+    final show = switch (ctx.layout.paidStampMode) {
+      ReceiptPaidStampMode.hidden => false,
+      ReceiptPaidStampMode.paidOnly =>
+        ctx.sale.paymentStatus == PaymentStatus.paid,
+      ReceiptPaidStampMode.unpaidOnly =>
+        ctx.sale.paymentStatus != PaymentStatus.paid,
+      ReceiptPaidStampMode.always => true,
+    };
+    if (!show) return pw.SizedBox();
+    final text = ctx.sale.paymentStatus == PaymentStatus.paid
+        ? ctx.layout.paidStampText
+        : ctx.layout.unpaidStampText;
+    if (text.trim().isEmpty) return pw.SizedBox();
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 10),
+      child: pw.Text(
+        text,
+        textAlign: pw.TextAlign.center,
+        style: pw.TextStyle(
+          fontSize: ctx.layout.totalFontSize,
+          color: _tint(ctx.text, 0.55),
+        ),
+      ),
+    );
+  }
+
   pw.Widget _footerBlock(
     _ReceiptRenderContext ctx, {
     required bool centered,
@@ -1541,71 +1875,26 @@ class ReceiptPdfService {
   }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.only(top: 14),
-      child: pw.Text(
-        ctx.layout.footerMessage,
-        textAlign: centered ? pw.TextAlign.center : pw.TextAlign.left,
-        style: pw.TextStyle(
-          fontSize: small ? 8 : 9,
-          color: ctx.text,
-          fontStyle: italic ? pw.FontStyle.italic : pw.FontStyle.normal,
-        ),
+      child: pw.Column(
+        crossAxisAlignment: centered
+            ? pw.CrossAxisAlignment.center
+            : pw.CrossAxisAlignment.start,
+        children: <pw.Widget>[
+          pw.Text(
+            ctx.layout.footerMessage,
+            textAlign: centered ? pw.TextAlign.center : pw.TextAlign.left,
+            style: pw.TextStyle(
+              fontSize: small
+                  ? (ctx.layout.bodyFontSize - 2).clamp(7, 16)
+                  : ctx.layout.bodyFontSize,
+              color: ctx.text,
+              fontStyle: italic ? pw.FontStyle.italic : pw.FontStyle.normal,
+            ),
+          ),
+          _paidStamp(ctx),
+        ],
       ),
     );
-  }
-
-  Future<Uint8List?> _safeLogoBytes({String? url, String? cid}) async {
-    final candidates = IpfsUrl.candidates(url: url, cid: cid);
-    for (final candidate in candidates) {
-      try {
-        final response = await _http
-            .get(Uri.parse(candidate))
-            .timeout(const Duration(seconds: 8));
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          continue;
-        }
-        final bytes = response.bodyBytes;
-        if (bytes.lengthInBytes <= 0 || bytes.lengthInBytes > 2 * 1024 * 1024) {
-          continue;
-        }
-        final contentType = response.headers['content-type'] ?? '';
-        // Pinata / IPFS often returns application/octet-stream — accept those
-        // when the payload still looks like a real image.
-        if (contentType.contains('image') || _looksLikeImage(bytes)) {
-          return bytes;
-        }
-      } catch (_) {
-        // Try the next gateway candidate.
-      }
-    }
-    return null;
-  }
-
-  bool _looksLikeImage(Uint8List bytes) {
-    if (bytes.lengthInBytes < 4) return false;
-    // JPEG
-    if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return true;
-    // PNG
-    if (bytes[0] == 0x89 &&
-        bytes[1] == 0x50 &&
-        bytes[2] == 0x4E &&
-        bytes[3] == 0x47) {
-      return true;
-    }
-    // WebP: RIFF....WEBP
-    if (bytes.lengthInBytes >= 12 &&
-        bytes[0] == 0x52 &&
-        bytes[1] == 0x49 &&
-        bytes[2] == 0x46 &&
-        bytes[3] == 0x46 &&
-        bytes[8] == 0x57 &&
-        bytes[9] == 0x45 &&
-        bytes[10] == 0x42 &&
-        bytes[11] == 0x50) {
-      return true;
-    }
-    // GIF
-    if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return true;
-    return false;
   }
 
   pw.Widget _amountRow(
@@ -1613,10 +1902,17 @@ class ReceiptPdfService {
     int minor,
     Business business,
     PdfColor color, {
+    required double baseSize,
     bool bold = false,
     bool small = false,
   }) {
-    final size = small ? (bold ? 10.0 : 8.0) : (bold ? 12.0 : 10.0);
+    final normal = baseSize.clamp(8, 24).toDouble();
+    final boldSize = (baseSize + 1).clamp(9, 26).toDouble();
+    final compactNormal = (baseSize - 2).clamp(7, 22).toDouble();
+    final compactBold = (baseSize - 1).clamp(8, 24).toDouble();
+    final size = small
+        ? (bold ? compactBold : compactNormal)
+        : (bold ? boldSize : normal);
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 1),
       child: pw.Row(
@@ -1678,6 +1974,7 @@ class _ReceiptRenderContext {
     required this.businessTagline,
     required this.businessEmail,
     required this.businessWebsite,
+    required this.shadingBytes,
   });
 
   final Sale sale;
@@ -1694,6 +1991,7 @@ class _ReceiptRenderContext {
   final String? businessTagline;
   final String? businessEmail;
   final String? businessWebsite;
+  final Uint8List? shadingBytes;
 
   String get headerTitle => layout.customHeader.trim().isEmpty
       ? 'RECEIPT'

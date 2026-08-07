@@ -1,4 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Replace with the numeric Meta App ID before testing Facebook sign-in. -->
-    <string name="facebook_app_id">YOUR_FACEBOOK_APP_ID</string>
+    <!-- Numeric Meta App ID -->
+    <string name="facebook_app_id">1586428059595896</string>
+
+    <!-- Meta Client Token, not the App Secret -->
+    <string name="facebook_client_token">272979996253c88d7db17f5a98eb7ac1</string>
+
+    <!-- Add fb directly before the numeric App ID -->
+    <string name="fb_login_protocol_scheme">fb1586428059595896</string>
 </resources>

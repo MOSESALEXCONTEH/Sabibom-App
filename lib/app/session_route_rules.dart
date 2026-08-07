@@ -5,10 +5,7 @@ class SessionRouteState {
   });
 
   factory SessionRouteState.unresolved() {
-    return const SessionRouteState(
-      isResolved: false,
-      isAuthenticated: false,
-    );
+    return const SessionRouteState(isResolved: false, isAuthenticated: false);
   }
 
   final bool isResolved;

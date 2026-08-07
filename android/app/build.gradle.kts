@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
     // END: FlutterFire Configuration
@@ -10,8 +11,12 @@ plugins {
 android {
     namespace = "com.sabibom.app"
     compileSdk = flutter.compileSdkVersion
+    // Use the locally installed NDK; Flutter default 27.0.12077973 was corrupted
+    // and re-download was failing (0-byte zip / cache AccessDenied).
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -44,4 +49,8 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

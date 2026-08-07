@@ -18,12 +18,21 @@ abstract final class AppSpacing {
 
 /// Standard corner radii for product components.
 abstract final class AppRadii {
+  /// Chip / small pill radius.
+  static const chip = 8.0;
+
   /// Input control radius.
-  static const input = 12.0;
+  static const input = 8.0;
 
   /// Card radius.
-  static const card = 16.0;
+  static const card = 8.0;
 
   /// Prominent feature-surface radius.
   static const feature = 24.0;
+
+  /// Bottom-sheet / modal top-corner radius.
+  static const sheet = 28.0;
+
+  /// Fully-rounded pill radius (nav bar, floating action clusters).
+  static const pill = 30.0;
 }

@@ -5,12 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../app/router.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../auth/application/user_profile_provider.dart';
+import '../../demo/data/demo_business_service.dart';
 
 class BusinessSetupChoiceScreen extends StatefulWidget {
   const BusinessSetupChoiceScreen({super.key});
 
   @override
-  State<BusinessSetupChoiceScreen> createState() => _BusinessSetupChoiceScreenState();
+  State<BusinessSetupChoiceScreen> createState() =>
+      _BusinessSetupChoiceScreenState();
 }
 
 class _BusinessSetupChoiceScreenState extends State<BusinessSetupChoiceScreen> {
@@ -26,24 +28,44 @@ class _BusinessSetupChoiceScreenState extends State<BusinessSetupChoiceScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               const Spacer(),
-              Icon(Icons.storefront_outlined, size: 56, color: Theme.of(context).colorScheme.primary),
+              Icon(
+                Icons.storefront_outlined,
+                size: 56,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               const SizedBox(height: AppSpacing.lg),
-              Text('Set up your business', style: Theme.of(context).textTheme.headlineMedium),
+              Text(
+                'Set up your business',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                'Add your business details now to start tracking sales, stock, customers and expenses. You can also do this later from Settings.',
+                'Add your business details to start tracking sales, stock, customers and expenses. You can also explore a demo with sample data only.',
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: AppSpacing.xl),
               FilledButton(
-                onPressed: _isSaving ? null : () => _choose('in_progress', AppRoutes.businessSetup),
-                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+                onPressed: _isSaving
+                    ? null
+                    : () => _choose('in_progress', AppRoutes.businessSetup),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(54),
+                ),
                 child: const Text('Set Up Now'),
               ),
               const SizedBox(height: AppSpacing.md),
               OutlinedButton(
-                onPressed: _isSaving ? null : () => _choose('skipped', AppRoutes.dashboard),
-                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+                onPressed: _isSaving ? null : _startDemo,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(54),
+                ),
+                child: const Text('Explore Demo Business'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextButton(
+                onPressed: _isSaving
+                    ? null
+                    : () => _choose('skipped', AppRoutes.dashboard),
                 child: const Text('Do It Later'),
               ),
               const Spacer(flex: 2),
@@ -52,6 +74,32 @@ class _BusinessSetupChoiceScreenState extends State<BusinessSetupChoiceScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _startDemo() async {
+    setState(() => _isSaving = true);
+    try {
+      await DemoBusinessService().createOrResetDemo();
+      await updateBusinessSetupPreference(
+        status: 'completed',
+        promptSeen: true,
+      );
+      if (mounted) context.go(AppRoutes.dashboard);
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Demo setup failed: $error');
+        debugPrint('$stackTrace');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not start demo. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   Future<void> _choose(String status, String destination) async {

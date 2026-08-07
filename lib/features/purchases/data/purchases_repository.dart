@@ -108,15 +108,15 @@ class FirestorePurchasesRepository implements PurchasesRepository {
     return query
         .limit(
           normalizedBranchId == null || normalizedBranchId == 'main'
-              ? 400
-              : 100,
+              ? 800
+              : 500,
         )
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
               .where((doc) => matchesBranchScope(doc.data(), branchId))
               .map(Purchase.fromFirestore)
-              .take(100)
+              .take(500)
               .toList(),
         );
   }

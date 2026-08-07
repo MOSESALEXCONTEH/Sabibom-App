@@ -10,12 +10,22 @@ class AppLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: ClipRRect(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF080A12) : Colors.transparent,
         borderRadius: BorderRadius.circular(size * .2),
-        child: Image.asset('assets/images/SB icon.png', fit: BoxFit.contain),
+        border: isDark
+            ? Border.all(color: Theme.of(context).colorScheme.outlineVariant)
+            : null,
+      ),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(size * .2),
+          child: Image.asset('assets/images/SB icon.png', fit: BoxFit.contain),
+        ),
       ),
     );
   }

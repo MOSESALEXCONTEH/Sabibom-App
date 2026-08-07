@@ -220,7 +220,9 @@ class BusinessSetupController extends Notifier<BusinessSetupState> {
 
     if (step == BusinessSetupStep.financialSettings) {
       if (data.taxEnabled &&
-          (data.taxPercentage < 0 || data.taxPercentage > 100 || !data.taxPercentage.isFinite)) {
+          (data.taxPercentage < 0 ||
+              data.taxPercentage > 100 ||
+              !data.taxPercentage.isFinite)) {
         return 'Tax percentage must be a valid number between 0 and 100.';
       }
     }
@@ -365,8 +367,9 @@ class BusinessSetupController extends Notifier<BusinessSetupState> {
       email: data.email.trim(),
       address: data.address.trim(),
       customDistrict: data.customDistrict.trim(),
-      taxPercentage:
-          (data.taxEnabled && data.taxPercentage.isFinite) ? data.taxPercentage : 0,
+      taxPercentage: (data.taxEnabled && data.taxPercentage.isFinite)
+          ? data.taxPercentage
+          : 0,
       receiptSettings: data.receiptSettings.copyWith(
         businessName: data.receiptSettings.businessName.trim(),
         phoneNumber: data.receiptSettings.phoneNumber.trim(),

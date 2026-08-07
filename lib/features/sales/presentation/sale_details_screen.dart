@@ -9,6 +9,7 @@ import 'package:open_filex/open_filex.dart';
 
 import '../../../app/router.dart';
 import '../../../core/formatting/currency_formatter.dart';
+import '../../../core/sync/record_sync_status.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../receipts/data/firestore_receipt_template_repository.dart';
@@ -144,6 +145,13 @@ class _SaleDetailsBody extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Sale Details'),
         actions: <Widget>[
+          RecordSyncStatusIcon(
+            request: RecordSyncRequest(
+              businessId: businessId,
+              collection: 'sales',
+              recordId: saleId,
+            ),
+          ),
           IconButton(
             tooltip: 'View Receipt',
             onPressed: () => SalesNavigation.openSaleReceipt(context, saleId),
@@ -543,18 +551,14 @@ class _SaleDetailsContent extends ConsumerWidget {
   }
 
   Future<Uint8List> _buildPdf(ActiveBusinessData active) async {
-    final snapshot = sale.receiptTemplateSnapshot;
-    final template = snapshot != null && snapshot.isNotEmpty
-        ? ReceiptTemplate.fromSnapshot(businessId, snapshot)
-        : await ReceiptTemplateRepository().getDefaultTemplate(
-            businessId,
-            preferredId: active.business.defaultReceiptTemplateId,
-          );
+    final template = await ReceiptTemplateRepository().getDefaultTemplate(
+      businessId,
+      preferredId: active.business.defaultReceiptTemplateId,
+    );
     return ReceiptPdfService().buildPdf(
       sale: sale,
       business: active.business,
       template: template,
-      templateSnapshot: snapshot,
     );
   }
 
@@ -799,7 +803,13 @@ class _StatusChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+        style: TextStyle(
+          color: ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+              ? Colors.white
+              : const Color(0xFF1F2937),
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
       ),
     );
   }

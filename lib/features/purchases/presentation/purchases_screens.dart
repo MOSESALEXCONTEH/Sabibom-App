@@ -6,12 +6,17 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/router.dart';
 import '../../../core/formatting/currency_formatter.dart';
+import '../../../core/formatting/record_date_filter.dart';
+import '../../../core/widgets/barcode_scanner_screen.dart';
+import '../../../core/sync/record_sync_status.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_list_primitives.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../../core/widgets/list_bulk_actions.dart';
+import '../../../core/widgets/record_date_filter_bar.dart';
 import '../../branches/application/current_branch_providers.dart';
+import '../../branches/application/branch_query_error.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../products/application/products_providers.dart';
 import '../../products/domain/product.dart';
@@ -32,6 +37,7 @@ class PurchasesScreen extends ConsumerStatefulWidget {
 
 class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
   var _selectionMode = false;
+  RecordDatePeriod _datePeriod = RecordDatePeriod.all;
   final Set<String> _selected = <String>{};
   List<String> _visibleIds = const [];
 
@@ -57,6 +63,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
       );
     }
     final businessId = active.business.businessId;
+    final branchId = ref.watch(currentBranchReadScopeProvider);
     final purchases = ref.watch(purchasesProvider(businessId));
     return Scaffold(
       appBar: AppBar(
@@ -77,6 +84,13 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
           onDeleteSelected: () => _bulkVoid(businessId),
           deleteTooltip: 'Void selected',
         ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: RecordDateFilterBar(
+            selected: _datePeriod,
+            onSelected: (period) => setState(() => _datePeriod = period),
+          ),
+        ),
       ),
       floatingActionButton: _selectionMode
           ? null
@@ -88,12 +102,27 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
       body: purchases.when(
         loading: () =>
             const AppListSkeleton(padding: EdgeInsets.all(AppSpacing.md)),
-        error: (_, _) => AppErrorState(
-          message: 'Could not load purchases.',
-          onRetry: () => ref.invalidate(purchasesProvider(businessId)),
-        ),
+        error: (error, _) {
+          final view = branchQueryErrorView(
+            error,
+            queryName: 'purchases',
+            businessId: businessId,
+            branchId: branchId,
+            limit: 100,
+          );
+          return AppErrorState(
+            message: view.message,
+            onRetry: () => ref.invalidate(purchasesProvider(businessId)),
+          );
+        },
         data: (items) {
-          final voidable = items
+          final filteredItems = items
+              .where(
+                (purchase) =>
+                    recordFallsInPeriod(purchase.createdAt, _datePeriod),
+              )
+              .toList(growable: false);
+          final voidable = filteredItems
               .where((p) => p.status != PurchaseStatus.voided)
               .map((p) => p.purchaseId)
               .toList(growable: false);
@@ -102,10 +131,12 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
               if (mounted) setState(() => _visibleIds = voidable);
             });
           }
-          if (items.isEmpty) {
+          if (filteredItems.isEmpty) {
             return AppEmptyState(
-              title: 'No purchases yet',
-              description: 'Record stock purchases from your suppliers.',
+              title: 'No purchases in this period',
+              description: _datePeriod == RecordDatePeriod.all
+                  ? 'Record stock purchases from your suppliers.'
+                  : 'Choose another date range to see older purchases.',
               icon: Icons.shopping_cart_outlined,
               actionLabel: 'New purchase',
               actionIcon: Icons.add,
@@ -114,10 +145,10 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
           }
           return ListView.separated(
             padding: const EdgeInsets.all(AppSpacing.md),
-            itemCount: items.length,
+            itemCount: filteredItems.length,
             separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
             itemBuilder: (context, index) {
-              final purchase = items[index];
+              final purchase = filteredItems[index];
               final canVoid = purchase.status != PurchaseStatus.voided;
               final tile = AppListRow(
                 onTap: () => context.pushNamed(
@@ -130,7 +161,9 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                 title: purchase.purchaseNumber,
                 subtitle:
                     '${purchase.supplierName} · ${purchase.paymentStatus.name.replaceAll('partially', 'partially ')}'
-                    '${canVoid ? '' : ' · VOIDED'}',
+                    '${canVoid ? '' : ' · VOIDED'}\n'
+                    '${formatRecordDateTime(purchase.createdAt)}',
+                isThreeLine: true,
                 trailing: Text(
                   formatCurrency(
                     minorToMoney(purchase.totalMinor),
@@ -273,6 +306,8 @@ class _NewPurchaseScreenState extends ConsumerState<NewPurchaseScreen> {
   String? _supplierId;
   String? _purchaseId;
   bool _submitting = false;
+  bool _sabiSupplierApplied = false;
+  bool _sabiProductsApplied = false;
 
   @override
   void initState() {
@@ -331,23 +366,26 @@ class _NewPurchaseScreenState extends ConsumerState<NewPurchaseScreen> {
           suppliers.when(
             loading: () => const LinearProgressIndicator(),
             error: (_, _) => const Text('Could not load suppliers.'),
-            data: (items) => DropdownButtonFormField<Supplier>(
-              initialValue: items
-                  .where((supplier) => supplier.id == _supplierId)
-                  .firstOrNull,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Supplier'),
-              items: items
-                  .map(
-                    (supplier) => DropdownMenuItem(
-                      value: supplier,
-                      child: Text(supplier.name),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (supplier) =>
-                  setState(() => _supplierId = supplier?.id),
-            ),
+            data: (items) {
+              _applySabiSupplier(items);
+              return DropdownButtonFormField<Supplier>(
+                initialValue: items
+                    .where((supplier) => supplier.id == _supplierId)
+                    .firstOrNull,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Supplier'),
+                items: items
+                    .map(
+                      (supplier) => DropdownMenuItem(
+                        value: supplier,
+                        child: Text(supplier.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (supplier) =>
+                    setState(() => _supplierId = supplier?.id),
+              );
+            },
           ),
           const SizedBox(height: 20),
           Text('Products', style: Theme.of(context).textTheme.titleMedium),
@@ -355,11 +393,18 @@ class _NewPurchaseScreenState extends ConsumerState<NewPurchaseScreen> {
           products.when(
             loading: () => const LinearProgressIndicator(),
             error: (_, _) => const Text('Could not load products.'),
-            data: (products) => _ProductPicker(
-              products: products.where((product) => product.isActive).toList(),
-              selected: _items,
-              onAdd: _addProduct,
-            ),
+            data: (products) {
+              final activeProducts = products
+                  .where((product) => product.isActive)
+                  .toList();
+              _applySabiProducts(activeProducts);
+              return _ProductPicker(
+                products: activeProducts,
+                selected: _items,
+                onAdd: _addProduct,
+                onScan: () => _scanPurchaseProduct(activeProducts),
+              );
+            },
           ),
           if (_items.isNotEmpty) ...<Widget>[
             const SizedBox(height: 16),
@@ -451,6 +496,82 @@ class _NewPurchaseScreenState extends ConsumerState<NewPurchaseScreen> {
     );
   });
 
+  Future<void> _scanPurchaseProduct(List<Product> products) async {
+    final barcode = await scanBarcode(context);
+    if (!mounted || barcode == null) return;
+    Product? match;
+    for (final product in products) {
+      if (product.barcode?.trim() == barcode.trim()) {
+        match = product;
+        break;
+      }
+    }
+    if (match == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No product matches this barcode.')),
+      );
+      return;
+    }
+    _addProduct(match);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${match.name} added.')));
+  }
+
+  void _applySabiSupplier(List<Supplier> suppliers) {
+    if (_sabiSupplierApplied) return;
+    _sabiSupplierApplied = true;
+    final query = widget.sabiQuery?.toLowerCase().trim() ?? '';
+    if (query.isEmpty || _supplierId != null) return;
+    for (final supplier in suppliers) {
+      if (!query.contains(supplier.name.toLowerCase())) continue;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _supplierId == null) {
+          setState(() => _supplierId = supplier.id);
+        }
+      });
+      return;
+    }
+  }
+
+  void _applySabiProducts(List<Product> products) {
+    if (_sabiProductsApplied) return;
+    _sabiProductsApplied = true;
+    final query = widget.sabiQuery?.toLowerCase().trim() ?? '';
+    if (query.isEmpty) return;
+    final matches = <Product, double>{};
+    for (final product in products) {
+      final name = product.name.toLowerCase().trim();
+      if (name.isEmpty || !query.contains(name)) continue;
+      final escaped = RegExp.escape(name);
+      final quantityMatch = RegExp(
+        '(\\d+(?:\\.\\d+)?)\\s*(?:x\\s*)?$escaped',
+        caseSensitive: false,
+      ).firstMatch(query);
+      matches[product] = double.tryParse(quantityMatch?.group(1) ?? '') ?? 1;
+    }
+    if (matches.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        for (final entry in matches.entries) {
+          final product = entry.key;
+          _items[product.id] = PurchaseItem(
+            purchaseItemId: product.id,
+            productId: product.id,
+            name: product.name,
+            sku: product.sku,
+            unit: product.unit,
+            quantity: entry.value,
+            unitCostMinor: product.costPriceMinor,
+            trackStock: product.trackStock,
+            tracksExpiry: product.tracksExpiry,
+          );
+        }
+      });
+    });
+  }
+
   Future<void> _submit(dynamic business) async {
     final branchId = ref.read(currentWritableBranchIdProvider);
     final branchSelection = ref.read(currentBranchProvider).asData?.value;
@@ -540,7 +661,18 @@ class PurchaseDetailsScreen extends ConsumerWidget {
       purchaseProvider((active.business.businessId, purchaseId)),
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('Purchase details')),
+      appBar: AppBar(
+        title: const Text('Purchase details'),
+        actions: <Widget>[
+          RecordSyncStatusIcon(
+            request: RecordSyncRequest(
+              businessId: active.business.businessId,
+              collection: 'purchases',
+              recordId: purchaseId,
+            ),
+          ),
+        ],
+      ),
       body: purchase.when(
         loading: () => const Padding(
           padding: EdgeInsets.all(AppSpacing.md),
@@ -559,6 +691,23 @@ class PurchaseDetailsScreen extends ConsumerWidget {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               Text(value.supplierName),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.schedule_outlined,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      formatRecordDateTime(value.createdAt),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
               if (value.branchNameSnapshot?.isNotEmpty == true)
                 Text('Branch: ${value.branchNameSnapshot}'),
               if (value.branchCodeSnapshot?.isNotEmpty == true)
@@ -757,31 +906,41 @@ class _ProductPicker extends StatelessWidget {
     required this.products,
     required this.selected,
     required this.onAdd,
+    required this.onScan,
   });
   final List<Product> products;
   final Map<String, PurchaseItem> selected;
   final ValueChanged<Product> onAdd;
+  final VoidCallback onScan;
   @override
   Widget build(BuildContext context) => Column(
-    children: products
-        .map(
-          (product) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(product.name),
-            subtitle: Text(
-              'Cost: ${formatCurrency(minorToMoney(product.costPriceMinor))}',
-            ),
-            trailing: IconButton(
-              onPressed: () => onAdd(product),
-              icon: Icon(
-                selected.containsKey(product.id)
-                    ? Icons.add_circle
-                    : Icons.add_circle_outline,
-              ),
+    children: <Widget>[
+      Align(
+        alignment: Alignment.centerRight,
+        child: OutlinedButton.icon(
+          onPressed: onScan,
+          icon: const Icon(Icons.qr_code_scanner),
+          label: const Text('Scan product'),
+        ),
+      ),
+      ...products.map(
+        (product) => ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(product.name),
+          subtitle: Text(
+            'Cost: ${formatCurrency(minorToMoney(product.costPriceMinor))}',
+          ),
+          trailing: IconButton(
+            onPressed: () => onAdd(product),
+            icon: Icon(
+              selected.containsKey(product.id)
+                  ? Icons.add_circle
+                  : Icons.add_circle_outline,
             ),
           ),
-        )
-        .toList(),
+        ),
+      ),
+    ],
   );
 }
 

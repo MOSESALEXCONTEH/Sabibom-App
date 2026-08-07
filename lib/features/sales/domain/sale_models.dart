@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../../inventory/domain/inventory_batch.dart';
+
 enum PaymentMethod {
   cash,
   mobileMoney,
@@ -47,22 +49,34 @@ class SaleProduct {
     this.imageUrl,
   });
 
-  factory SaleProduct.fromFirestore(String id, Map<String, dynamic> data) =>
-      SaleProduct(
-        productId: id,
-        name: data['name'] as String? ?? 'Unnamed product',
-        sku: data['sku'] as String?,
-        barcode: data['barcode'] as String?,
-        unit: data['unit'] as String? ?? 'unit',
-        sellingPriceMinor: moneyToMinor(data['sellingPrice'] ?? data['price']),
-        costPriceMinor: moneyToMinor(data['costPrice']),
-        quantity: (data['quantity'] as num?)?.toDouble() ?? 0,
-        lowStockThreshold: (data['lowStockThreshold'] as num?)?.toDouble() ?? 0,
-        trackStock: data['trackStock'] as bool? ?? true,
-        status: data['status'] as String? ?? 'active',
-        categoryName: data['categoryName'] as String?,
-        imageUrl: data['imageUrl'] as String?,
-      );
+  factory SaleProduct.fromFirestore(String id, Map<String, dynamic> data) {
+    return SaleProduct(
+      productId: id,
+      name: data['name'] as String? ?? 'Unnamed product',
+      sku: data['sku'] as String?,
+      barcode: data['barcode'] as String?,
+      unit: data['unit'] as String? ?? 'unit',
+      sellingPriceMinor: _readPriceMinor(
+        minor: data['sellingPriceMinor'],
+        major: data['sellingPrice'] ?? data['price'],
+      ),
+      costPriceMinor: _readPriceMinor(
+        minor: data['costPriceMinor'],
+        major: data['costPrice'],
+      ),
+      quantity: (data['quantity'] as num?)?.toDouble() ?? 0,
+      lowStockThreshold: (data['lowStockThreshold'] as num?)?.toDouble() ?? 0,
+      trackStock: data['trackStock'] as bool? ?? true,
+      status: data['status'] as String? ?? 'active',
+      categoryName: data['categoryName'] as String?,
+      imageUrl: data['imageUrl'] as String?,
+    );
+  }
+
+  static int _readPriceMinor({Object? minor, Object? major}) {
+    if (minor is num) return minor.round();
+    return moneyToMinor(major);
+  }
 
   final String productId;
   final String name;
@@ -90,18 +104,28 @@ class SaleCustomer {
     this.balanceMinor = 0,
   });
 
-  factory SaleCustomer.fromFirestore(String id, Map<String, dynamic> data) =>
-      SaleCustomer(
-        customerId: id,
-        name: data['name'] as String? ?? 'Unnamed customer',
-        phone: data['phone'] as String? ?? data['phoneNumber'] as String?,
-        balanceMinor: moneyToMinor(data['balanceMinor'] ?? data['balance']),
-      );
+  factory SaleCustomer.fromFirestore(String id, Map<String, dynamic> data) {
+    final balance = data['balanceMinor'] ?? data['balance'];
+    return SaleCustomer(
+      customerId: id,
+      name: data['name'] as String? ?? 'Unnamed customer',
+      phone: data['phone'] as String? ?? data['phoneNumber'] as String?,
+      balanceMinor: balance is int ? balance : moneyToMinor(balance),
+    );
+  }
 
   final String customerId;
   final String name;
   final String? phone;
   final int balanceMinor;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SaleCustomer && other.customerId == customerId;
+
+  @override
+  int get hashCode => customerId.hashCode;
 }
 
 class SaleItem {
@@ -116,10 +140,17 @@ class SaleItem {
     this.sku,
     this.barcode,
     this.unit = 'unit',
+    this.quantityInput,
+    this.unitPriceInput,
     this.costPriceMinor = 0,
     this.discountType,
     this.discountValue = 0,
     this.note,
+    this.batchAllocations = const <BatchAllocation>[],
+    this.actualNetRevenueMinor,
+    this.costOfGoodsSoldMinor,
+    this.grossProfitMinor,
+    this.profitIsExact = true,
   });
 
   final String saleItemId;
@@ -129,6 +160,11 @@ class SaleItem {
   final String? sku;
   final String? barcode;
   final String unit;
+  /// Exact quantity text the merchant typed/spoke (e.g. `2 bags`).
+  /// Calculations always use [quantity]; this is for display/persistence.
+  final String? quantityInput;
+  /// Exact unit-price text (e.g. `paid`, `50 Le`). Math uses [unitPriceMinor].
+  final String? unitPriceInput;
   final double quantity;
   final int unitPriceMinor;
   final int costPriceMinor;
@@ -136,12 +172,27 @@ class SaleItem {
   final DiscountType? discountType;
   final double discountValue;
   final String? note;
+  final List<BatchAllocation> batchAllocations;
+  final int? actualNetRevenueMinor;
+  final int? costOfGoodsSoldMinor;
+  final int? grossProfitMinor;
+  final bool profitIsExact;
 
   SaleItem copyWith({
     double? quantity,
+    String? unit,
+    String? quantityInput,
+    bool clearQuantityInput = false,
+    String? unitPriceInput,
+    bool clearUnitPriceInput = false,
     double? discountValue,
     DiscountType? discountType,
     bool clearDiscount = false,
+    List<BatchAllocation>? batchAllocations,
+    int? actualNetRevenueMinor,
+    int? costOfGoodsSoldMinor,
+    int? grossProfitMinor,
+    bool? profitIsExact,
   }) => SaleItem(
     saleItemId: saleItemId,
     productId: productId,
@@ -149,7 +200,13 @@ class SaleItem {
     name: name,
     sku: sku,
     barcode: barcode,
-    unit: unit,
+    unit: unit ?? this.unit,
+    quantityInput: clearQuantityInput
+        ? null
+        : (quantityInput ?? this.quantityInput),
+    unitPriceInput: clearUnitPriceInput
+        ? null
+        : (unitPriceInput ?? this.unitPriceInput),
     quantity: quantity ?? this.quantity,
     unitPriceMinor: unitPriceMinor,
     costPriceMinor: costPriceMinor,
@@ -157,6 +214,12 @@ class SaleItem {
     discountType: clearDiscount ? null : (discountType ?? this.discountType),
     discountValue: clearDiscount ? 0 : (discountValue ?? this.discountValue),
     note: note,
+    batchAllocations: batchAllocations ?? this.batchAllocations,
+    actualNetRevenueMinor:
+        actualNetRevenueMinor ?? this.actualNetRevenueMinor,
+    costOfGoodsSoldMinor: costOfGoodsSoldMinor ?? this.costOfGoodsSoldMinor,
+    grossProfitMinor: grossProfitMinor ?? this.grossProfitMinor,
+    profitIsExact: profitIsExact ?? this.profitIsExact,
   );
 
   factory SaleItem.fromProduct(SaleProduct product, {required String itemId}) =>

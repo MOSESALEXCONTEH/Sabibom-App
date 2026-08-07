@@ -12,6 +12,19 @@
 .swiftpm/
 migrate_working_dir/
 
+# Secrets and local env (never commit values)
+.env
+.env.*
+!.env.example
+.secret.local
+functions/.env
+functions/.env.*
+functions/.secret.local
+vercel-api/.env
+vercel-api/.env.*
+vercel-api/.vercel
+!**/.env.example
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -43,3 +56,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated dependency/build caches (not source)
+**/.gradle/
+**/node_modules/
+**/build/
+.gradle-user-home/

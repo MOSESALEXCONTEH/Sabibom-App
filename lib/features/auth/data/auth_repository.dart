@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../notifications/data/push_notification_bootstrap.dart';
 import '../domain/app_user.dart';
 import '../domain/auth_failure.dart';
 
@@ -114,14 +115,16 @@ class AuthRepository {
         password: password,
       );
       final user = result.user!;
-      await _userDocument(user.uid).set(_newProfile(
-        uid: user.uid,
-        fullName: fullName.trim(),
-        email: user.email,
-        phoneNumber: user.phoneNumber,
-        photoUrl: user.photoURL,
-        provider: 'password',
-      ));
+      await _userDocument(user.uid).set(
+        _newProfile(
+          uid: user.uid,
+          fullName: fullName.trim(),
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          photoUrl: user.photoURL,
+          provider: 'password',
+        ),
+      );
       return _toAppUser(user);
     } on FirebaseAuthException catch (error) {
       throw AuthFailure.fromFirebase(error);
@@ -129,11 +132,19 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    await PushNotificationBootstrap().unregisterCurrentUserToken();
     await _auth.signOut();
-    if (_googleInitialized) {
-      await GoogleSignIn.instance.signOut();
-    }
-    await FacebookAuth.instance.logOut();
+    // Provider sign-outs are best-effort: the Facebook plugin fails to
+    // register when the Facebook SDK is not configured on the device, and
+    // that must never block or crash the Firebase sign-out above.
+    try {
+      if (_googleInitialized) {
+        await GoogleSignIn.instance.signOut();
+      }
+    } catch (_) {}
+    try {
+      await FacebookAuth.instance.logOut();
+    } catch (_) {}
   }
 
   Future<AppUser> _toAppUser(User user) async {
@@ -167,16 +178,16 @@ class AuthRepository {
     final document = _userDocument(user.uid);
     final existing = await document.get();
     if (!existing.exists) {
-      await document.set(_newProfile(
-        uid: user.uid,
-        fullName: fullName?.trim().isNotEmpty == true
-            ? fullName!.trim()
-            : '',
-        email: email,
-        phoneNumber: user.phoneNumber,
-        photoUrl: photoUrl,
-        provider: provider,
-      ));
+      await document.set(
+        _newProfile(
+          uid: user.uid,
+          fullName: fullName?.trim().isNotEmpty == true ? fullName!.trim() : '',
+          email: email,
+          phoneNumber: user.phoneNumber,
+          photoUrl: photoUrl,
+          provider: provider,
+        ),
+      );
       return;
     }
 
@@ -217,7 +228,9 @@ class AuthRepository {
     final picture = data['picture'];
     if (picture is Map<String, dynamic>) {
       final pictureData = picture['data'];
-      if (pictureData is Map<String, dynamic>) return pictureData['url'] as String?;
+      if (pictureData is Map<String, dynamic>) {
+        return pictureData['url'] as String?;
+      }
     }
     return null;
   }

@@ -38,9 +38,358 @@ service cloud.firestore {
         );
     }
 
+    function memberData(businessId) {
+      return get(
+        /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+      ).data;
+    }
+
+    function hasBusinessPermission(businessId, permission) {
+      return isBusinessOwner(businessId)
+        || (
+          isActiveBusinessMember(businessId)
+          && !(permission in memberData(businessId).get('permissionDenials', []))
+          && (
+            memberData(businessId).role == 'owner'
+            || memberData(businessId).isOwner == true
+            || permission in memberData(businessId).get('permissions', [])
+            || permission in memberData(businessId).get('permissionOverrides', [])
+          )
+        );
+    }
+
+    function hasGrantedBusinessPermission(businessId, permission) {
+      return isBusinessOwner(businessId)
+        || (
+          isActiveBusinessMember(businessId)
+          && !(permission in memberData(businessId).get('permissionDenials', []))
+          && (
+            memberData(businessId).role == 'owner'
+            || memberData(businessId).isOwner == true
+            || permission in memberData(businessId).get('permissions', [])
+            || permission in memberData(businessId).get('permissionOverrides', [])
+          )
+        );
+    }
+
+    function canManageStaff(businessId) {
+      return hasBusinessPermission(businessId, 'manage_staff');
+    }
+
+    function canManageBranches(businessId) {
+      return hasGrantedBusinessPermission(businessId, 'manage_branches');
+    }
+
+    function canAssignStaffToBranches(businessId) {
+      return hasGrantedBusinessPermission(
+        businessId,
+        'assign_staff_to_branches'
+      ) || hasGrantedBusinessPermission(businessId, 'manage_branch_staff');
+    }
+
+    function canViewAllBranches(businessId) {
+      return hasGrantedBusinessPermission(businessId, 'view_all_branches');
+    }
+
+    function hasBranchAccess(businessId, branchId) {
+      return isBusinessOwner(businessId)
+        || (
+          isActiveBusinessMember(businessId)
+          && !('view_branch' in memberData(businessId).get('permissionDenials', []))
+          && (
+            hasGrantedBusinessPermission(businessId, 'view_branch')
+            || hasGrantedBusinessPermission(businessId, 'view_branches')
+            || memberData(businessId)
+              .get('roleId', memberData(businessId).get('role', ''))
+              in [
+                'admin',
+                'manager',
+                'cashier',
+                'staff',
+                'stock_keeper',
+                'accountant'
+              ]
+          )
+          && memberData(businessId)
+            .get('assignedBranchIds', [])
+            .hasAny([branchId])
+        );
+    }
+
+    function canReadBranchData(businessId, branchId) {
+      return hasBranchAccess(businessId, branchId);
+    }
+
+    function canMutateInventory(businessId) {
+      return isBusinessOwner(businessId)
+        || canCompleteSales(businessId)
+        || hasBusinessPermission(businessId, 'adjust_stock')
+        || hasBusinessPermission(businessId, 'manage_products')
+        || hasBusinessPermission(businessId, 'create_purchase')
+        || hasBusinessPermission(businessId, 'dispose_expired_stock');
+    }
+
+    function isProductStockMirrorUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'quantity',
+        'costPriceMinor',
+        'costPrice',
+        'realizedGrossProfitMinor',
+        'updatedAt',
+        'updatedBy'
+      ]);
+    }
+
+    function effectiveBranchId(data) {
+      return data.get('branchId', '') == '' ? 'main' : data.get('branchId', 'main');
+    }
+
+    function hasExplicitBranchId(data) {
+      return data.get('branchId', '') is string
+        && data.get('branchId', '') != '';
+    }
+
+    function canWriteBranchScopedData(businessId, data) {
+      return canCompleteSales(businessId)
+        && hasExplicitBranchId(data)
+        && hasBranchAccess(businessId, effectiveBranchId(data))
+        && branchIsActive(businessId, effectiveBranchId(data));
+    }
+
+    function canCreateExpenseInBranch(businessId, data) {
+      return hasGrantedBusinessPermission(businessId, 'create_expense')
+        && hasExplicitBranchId(data)
+        && hasBranchAccess(businessId, effectiveBranchId(data))
+        && branchIsActive(businessId, effectiveBranchId(data));
+    }
+
+    function canRecordSupplierActivity(businessId, data) {
+      return (
+          hasGrantedBusinessPermission(businessId, 'record_supplier_payment')
+          || hasGrantedBusinessPermission(businessId, 'create_purchase')
+        )
+        && hasExplicitBranchId(data)
+        && hasBranchAccess(businessId, effectiveBranchId(data))
+        && branchIsActive(businessId, effectiveBranchId(data));
+    }
+
+    function isSupplierBalanceUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'balanceMinor',
+        'balance',
+        'totalPaidMinor',
+        'updatedBy',
+        'updatedAt'
+      ]);
+    }
+
+    function branchDoc(businessId, branchId) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)/branches/$(branchId));
+    }
+
+    function branchExists(businessId, branchId) {
+      return exists(/databases/$(database)/documents/businesses/$(businessId)/branches/$(branchId));
+    }
+
+    function branchIsActive(businessId, branchId) {
+      return branchExists(businessId, branchId)
+        && branchDoc(businessId, branchId).data.status == 'active';
+    }
+
+
+    function productBelongsToBusiness(businessId, productId) {
+      return exists(
+          /databases/$(database)/documents/businesses/$(businessId)/products/$(productId)
+        )
+        && get(
+          /databases/$(database)/documents/businesses/$(businessId)/products/$(productId)
+        ).data.businessId == businessId;
+    }
+
+    function validInventoryData(data) {
+      return data.quantity is number
+        && data.quantity >= 0
+        && data.get('reservedQuantity', 0) is number
+        && data.get('reservedQuantity', 0) >= 0
+        && data.get('reservedQuantity', 0) <= data.quantity;
+    }
+
+    // Collection-group access for invitation lookup by code / id.
+    match /{path=**}/staff_invitations/{invitationId} {
+      allow read: if signedIn() && (
+        resource.data.status == 'pending'
+        || isBusinessOwner(resource.data.businessId)
+        || isActiveBusinessMember(resource.data.businessId)
+      );
+    }
+
     // User profiles
     match /users/{userId} {
       allow create, read, update: if isCurrentUser(userId);
+      allow delete: if false;
+
+      match /notifications/{notificationId} {
+        allow read: if isCurrentUser(userId);
+        // Users manage their own notifications; trusted members may create
+        // business alerts for colleagues. Title/body identity fields are set
+        // on create only — clients should not forge other users' prefs.
+        allow create: if signedIn() && (
+          isCurrentUser(userId)
+          || (
+            request.resource.data.businessId is string
+            && request.resource.data.businessId.size() > 0
+            && isActiveBusinessMember(request.resource.data.businessId)
+          )
+        );
+        allow update: if isCurrentUser(userId);
+        allow delete: if isCurrentUser(userId);
+      }
+
+      match /notification_preferences/{prefsId} {
+        allow read, create, update: if isCurrentUser(userId);
+        allow delete: if isCurrentUser(userId);
+      }
+
+      match /feedback/{feedbackId} {
+        allow create: if isCurrentUser(userId)
+          && request.resource.data.userId == request.auth.uid;
+        allow read, update: if isCurrentUser(userId)
+          && resource.data.userId == request.auth.uid;
+        allow delete: if false;
+      }
+
+      match /devices/{deviceId} {
+        allow read, create, update, delete: if isCurrentUser(userId);
+      }
+    }
+
+    // Deduplication ledger — signed-in writers for client alert services;
+    // prefer Admin SDK for production generation.
+    match /notification_events/{eventKey} {
+      allow read: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    match /feedback/{feedbackId} {
+      // Top-level feedback inbox (support triage).
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['userId', 'title', 'description', 'category'])
+        && request.resource.data.userId is string
+        && request.resource.data.userId == request.auth.uid;
+      allow read, update: if signedIn()
+        && resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Platform Super Admin — server-only (Firebase Admin SDK).
+    // Browser clients must not read or write these collections.
+    match /platform_admins/{adminUid} {
+      allow read, write: if false;
+    }
+
+    match /platform_admin_activity/{activityId} {
+      allow read, write: if false;
+    }
+
+    match /platform_metrics_daily/{dateKey} {
+      allow read, write: if false;
+    }
+
+    match /platform_settings/{docId} {
+      // Only intentionally public fields may be readable by the mobile app.
+      // Clients must not write. Prefer Admin SDK for all platform settings.
+      allow read: if docId == 'public' && signedIn();
+      allow write: if false;
+    }
+
+    match /platform_feature_flags/{flagId} {
+      allow read, write: if false;
+    }
+
+    match /platform_announcements/{announcementId} {
+      allow read, write: if false;
+    }
+
+    match /platform_app_versions/{versionId} {
+      allow read, write: if false;
+    }
+
+    match /platform_ai_requests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /platform_security_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /platform_backup_jobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /platform_restore_jobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /platform_import_jobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /platform_deletion_requests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /platform_notifications/{notificationId} {
+      allow read, write: if false;
+    }
+
+    match /platform_beta_testers/{testerId} {
+      allow read, write: if false;
+    }
+
+    match /platform_scheduled_jobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /support_tickets/{ticketId} {
+      allow read, write: if false;
+    }
+
+    match /bug_reports/{bugId} {
+      allow read, write: if false;
+    }
+
+    match /subscription_plans/{planId} {
+      allow read: if signedIn() && resource.data.status == 'active';
+      allow write: if false;
+    }
+
+    match /business_subscriptions/{businessId} {
+      allow read: if isBusinessOwner(businessId)
+        || isActiveBusinessMember(businessId);
+      allow write: if false;
+    }
+
+    match /billing_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    // Unanswered Sabi asks — training / improvement inbox.
+    match /sabi_unanswered/{askId} {
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.businessId is string
+        && request.resource.data.question is string
+        && (
+          isBusinessOwner(request.resource.data.businessId)
+          || isActiveBusinessMember(request.resource.data.businessId)
+        );
+      allow read: if signedIn()
+        && (
+          resource.data.userId == request.auth.uid
+          || isBusinessOwner(resource.data.businessId)
+          || isActiveBusinessMember(resource.data.businessId)
+        );
       allow delete: if false;
     }
 
@@ -67,6 +416,7 @@ service cloud.firestore {
 
         // Supports creation of the first owner membership in the
         // same batch that creates the business.
+        // Also allows invitees to accept (self-create non-owner).
         allow create: if signedIn() && (
           (
             memberId == request.auth.uid
@@ -78,52 +428,477 @@ service cloud.firestore {
             ).data.ownerId == request.auth.uid
           )
           || isBusinessOwner(businessId)
+          || canManageStaff(businessId)
+          || (
+            memberId == request.auth.uid
+            && request.resource.data.status == 'active'
+            && request.resource.data.get('isOwner', false) != true
+            && request.resource.data.get('roleId', request.resource.data.get('role', '')) != 'owner'
+            && request.resource.data.get('role', '') != 'owner'
+            && request.resource.data.get('allBranchesAccess', false) == false
+            && request.resource.data.get('assignedBranchIds', []).size() == 0
+            && request.resource.data.get('defaultBranchId', '') == ''
+          )
         );
 
         allow read: if isBusinessOwner(businessId)
-          || isActiveBusinessMember(businessId);
+          || isActiveBusinessMember(businessId)
+          || (signedIn() && memberId == request.auth.uid);
 
-        allow update, delete: if isBusinessOwner(businessId);
+        // Owners/managers may update other members.
+        // Members cannot escalate their own role/permissions.
+        allow update: if (canManageStaff(businessId)
+            || canAssignStaffToBranches(businessId))
+          && resource.data.get('isOwner', false) != true
+          && resource.data.get('roleId', resource.data.get('role', '')) != 'owner'
+          && request.resource.data.get('isOwner', false) != true
+          && request.resource.data.get('roleId', request.resource.data.get('role', '')) != 'owner'
+          && (
+            (
+              canManageStaff(businessId)
+              &&
+              request.resource.data.get('assignedBranchIds', []) == resource.data.get('assignedBranchIds', [])
+              && request.resource.data.get('allBranchesAccess', false) == resource.data.get('allBranchesAccess', false)
+              && request.resource.data.get('defaultBranchId', '') == resource.data.get('defaultBranchId', '')
+            )
+            || (
+              canAssignStaffToBranches(businessId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'assignedBranchIds',
+                'allBranchesAccess',
+                'defaultBranchId',
+                'permissionOverrides',
+                'updatedAt',
+                'updatedBy'
+              ])
+              && request.resource.data.get('permissionOverrides', [])
+                .hasAll(resource.data.get('permissionOverrides', []))
+              && request.resource.data.get('permissionOverrides', [])
+                .hasAny(['view_branch'])
+              && request.resource.data.get('permissionOverrides', []).size()
+                <= resource.data.get('permissionOverrides', []).size() + 1
+            )
+            || (
+              canManageStaff(businessId)
+              && canAssignStaffToBranches(businessId)
+            )
+          )
+          && (
+            memberId != request.auth.uid
+            || (
+              request.resource.data.roleId == resource.data.roleId
+              &&
+              request.resource.data.get('permissions', []) == resource.data.get('permissions', [])
+              && request.resource.data.get('permissionOverrides', []) == resource.data.get('permissionOverrides', [])
+              && request.resource.data.get('permissionDenials', []) == resource.data.get('permissionDenials', [])
+              && request.resource.data.get('assignedBranchIds', []) == resource.data.get('assignedBranchIds', [])
+              && request.resource.data.get('allBranchesAccess', false) == resource.data.get('allBranchesAccess', false)
+              && request.resource.data.get('defaultBranchId', '') == resource.data.get('defaultBranchId', '')
+            )
+          );
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /branches/{branchId} {
+        allow read: if hasBranchAccess(businessId, branchId)
+          || canViewAllBranches(businessId);
+
+        allow create: if canManageBranches(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.branchId == branchId
+          && request.resource.data.name is string
+          && request.resource.data.code is string
+          && request.resource.data.status in ['active', 'inactive', 'archived']
+          && (
+            request.resource.data.isMainBranch != true
+            || (
+              branchId == 'main'
+              && !branchExists(businessId, 'main')
+              && request.resource.data.status == 'active'
+            )
+          );
+
+        allow update: if canManageBranches(businessId)
+          && resource.data.businessId == businessId
+          && request.resource.data.businessId == businessId
+          && request.resource.data.branchId == resource.data.branchId
+          && request.resource.data.status in ['active', 'inactive', 'archived']
+          && (
+            resource.data.isMainBranch != true
+            || (
+              request.resource.data.isMainBranch == true
+              && request.resource.data.status == 'active'
+            )
+          )
+          && (
+            request.resource.data.isMainBranch != true
+            || branchId == 'main'
+          );
+
+        allow delete: if false;
+
+        match /inventory/{productId} {
+          allow read: if (isBusinessOwner(businessId)
+            || isActiveBusinessMember(businessId))
+            && canReadBranchData(businessId, branchId);
+
+          allow create: if canMutateInventory(businessId)
+            && hasBranchAccess(businessId, branchId)
+            && branchIsActive(businessId, branchId)
+            && request.resource.data.businessId == businessId
+            && request.resource.data.branchId == branchId
+            && request.resource.data.productId == productId
+            && productBelongsToBusiness(businessId, productId)
+            && validInventoryData(request.resource.data);
+
+          allow update: if canMutateInventory(businessId)
+            && hasBranchAccess(businessId, branchId)
+            && branchIsActive(businessId, branchId)
+            && resource.data.businessId == businessId
+            && resource.data.branchId == branchId
+            && resource.data.productId == productId
+            && request.resource.data.businessId == businessId
+            && request.resource.data.branchId == branchId
+            && request.resource.data.productId == productId
+            && productBelongsToBusiness(businessId, productId)
+            && validInventoryData(request.resource.data);
+
+          allow delete: if isBusinessOwner(businessId)
+            || hasBusinessPermission(businessId, 'manage_products');
+        }
+
+        match /counters/{counterId} {
+          allow read: if (isBusinessOwner(businessId)
+            || isActiveBusinessMember(businessId))
+            && canReadBranchData(businessId, branchId);
+          allow create, update: if canMutateInventory(businessId)
+            && hasBranchAccess(businessId, branchId)
+            && branchIsActive(businessId, branchId);
+          allow delete: if false;
+        }
+      }
+
+      match /roles/{roleId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if canManageStaff(businessId)
+          || hasBusinessPermission(businessId, 'manage_roles');
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /staff_invitations/{invitationId} {
+        allow read: if canManageStaff(businessId)
+          || (
+            signedIn()
+            && resource.data.status == 'pending'
+          );
+        allow create: if canManageStaff(businessId);
+        allow update: if canManageStaff(businessId)
+          || (
+            signedIn()
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.acceptedBy == request.auth.uid
+          );
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /staff_activity/{activityId} {
+        allow read: if hasBusinessPermission(businessId, 'view_staff_activity')
+          || isBusinessOwner(businessId)
+          || (
+            isActiveBusinessMember(businessId)
+            && memberData(businessId).role in ['owner', 'manager']
+          );
+        allow create: if (isActiveBusinessMember(businessId)
+            || isBusinessOwner(businessId))
+          && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      match /approval_requests/{approvalId} {
+        allow read: if isActiveBusinessMember(businessId)
+          || isBusinessOwner(businessId);
+        allow create: if isActiveBusinessMember(businessId)
+          && request.resource.data.requestedBy == request.auth.uid;
+        allow update: if hasBusinessPermission(businessId, 'approve_sensitive_actions')
+          || (
+            isActiveBusinessMember(businessId)
+            && resource.data.requestedBy == request.auth.uid
+            && request.resource.data.status == 'cancelled'
+          );
+        allow delete: if false;
+      }
+
+      match /settings/{settingsId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'edit_business_settings');
+        allow delete: if false;
       }
 
       // A completed sale is a single Firestore transaction that creates its
       // receipt and accounting records while updating stock and credit.
       match /sales/{saleId} {
-        allow create: if canCompleteSales(businessId);
-        allow update, delete: if isBusinessOwner(businessId);
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow update: if (isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'void_sale'))
+          && canWriteBranchScopedData(businessId, request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
       }
 
       match /products/{productId} {
-        allow update: if canCompleteSales(businessId);
+        // Product definitions are shared across the business. Quantities live
+        // in branches/{branchId}/inventory/{productId}.
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create: if hasBusinessPermission(businessId, 'manage_products')
+          && request.resource.data.businessId == businessId
+          && request.resource.data.productId == productId;
+        allow update: if (
+            hasBusinessPermission(businessId, 'manage_products')
+            || (canMutateInventory(businessId) && isProductStockMirrorUpdate())
+          )
+          && resource.data.businessId == businessId
+          && request.resource.data.businessId == businessId
+          && request.resource.data.productId == productId;
+        allow delete: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'manage_products');
+      }
+
+      match /inventory_movements/{movementId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        // Inventory mutations are authored by trusted Vercel Admin SDK
+        // transactions. Clients may only create legacy-compatible movements
+        // while migration completes; updates remain owner-only.
+        allow create: if (canCompleteSales(businessId)
+          || hasBusinessPermission(businessId, 'adjust_stock'))
+          && hasExplicitBranchId(request.resource.data)
+          && hasBranchAccess(businessId, effectiveBranchId(request.resource.data))
+          && branchIsActive(businessId, effectiveBranchId(request.resource.data));
+        allow update, delete: if isBusinessOwner(businessId);
+      }
+
+      match /inventory_batches/{batchId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        // Clients cannot forge batch consumption, remaining quantities, or
+        // source fields. Mutations must go through Admin SDK endpoints.
+        allow create, update, delete: if false;
       }
 
       match /customers/{customerId} {
-        allow update: if canCompleteSales(businessId);
+        // Customer identity is business-level; ledger/activity remains branch scoped.
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create: if (canCompleteSales(businessId)
+          || hasBusinessPermission(businessId, 'manage_customers'))
+          && hasExplicitBranchId(request.resource.data)
+          && hasBranchAccess(businessId, effectiveBranchId(request.resource.data))
+          && branchIsActive(businessId, effectiveBranchId(request.resource.data));
+        allow update: if (canCompleteSales(businessId)
+          || hasBusinessPermission(businessId, 'manage_customers'))
+          && request.resource.data.businessId == businessId;
+        allow delete: if isBusinessOwner(businessId);
+
+        match /ledger/{entryId} {
+          allow read: if (isBusinessOwner(businessId)
+            || isActiveBusinessMember(businessId))
+            && canReadBranchData(businessId, effectiveBranchId(resource.data));
+          allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+          allow update, delete: if isBusinessOwner(businessId);
+        }
       }
 
       match /counters/{counterId} {
-        allow create, update: if canCompleteSales(businessId);
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data)
+          || canCreateExpenseInBranch(businessId, request.resource.data);
       }
 
       match /activity/{activityId} {
-        allow create: if canCompleteSales(businessId);
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        allow create: if canWriteBranchScopedData(businessId, request.resource.data)
+          || canCreateExpenseInBranch(businessId, request.resource.data)
+          || canRecordSupplierActivity(businessId, request.resource.data);
       }
 
       match /analytics/{analyticsId} {
-        allow create, update: if canCompleteSales(businessId);
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data)
+          || canCreateExpenseInBranch(businessId, request.resource.data)
+          || canRecordSupplierActivity(businessId, request.resource.data);
       }
 
       match /customer_ledger/{entryId} {
-        allow create: if canCompleteSales(businessId);
+        allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+      }
+
+      match /receipt_templates/{templateId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update, delete: if isBusinessOwner(businessId)
+          || (
+            isActiveBusinessMember(businessId)
+            && get(
+              /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+            ).data.role in ['manager']
+          );
+      }
+
+      match /expense_categories/{categoryId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if canCompleteSales(businessId);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        allow create: if canCreateExpenseInBranch(
+          businessId,
+          request.resource.data
+        );
+        allow update: if (
+            hasGrantedBusinessPermission(businessId, 'edit_expense')
+            || hasGrantedBusinessPermission(businessId, 'void_expense')
+          )
+          && hasExplicitBranchId(request.resource.data)
+          && hasBranchAccess(
+            businessId,
+            effectiveBranchId(request.resource.data)
+          )
+          && branchIsActive(
+            businessId,
+            effectiveBranchId(request.resource.data)
+          );
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /suppliers/{supplierId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create: if hasGrantedBusinessPermission(
+            businessId,
+            'manage_suppliers'
+          )
+          && request.resource.data.businessId == businessId
+          && request.resource.data.supplierId == supplierId
+          && !hasExplicitBranchId(request.resource.data);
+        allow update: if (
+            hasGrantedBusinessPermission(businessId, 'manage_suppliers')
+            || (
+              hasGrantedBusinessPermission(
+                businessId,
+                'record_supplier_payment'
+              )
+              && isSupplierBalanceUpdate()
+            )
+          )
+          && resource.data.businessId == businessId
+          && request.resource.data.businessId == businessId
+          && !hasExplicitBranchId(request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+
+        match /ledger/{entryId} {
+          allow read: if (isBusinessOwner(businessId)
+            || isActiveBusinessMember(businessId))
+            && canReadBranchData(businessId, effectiveBranchId(resource.data));
+          allow create: if canWriteBranchScopedData(businessId, request.resource.data)
+            || canRecordSupplierActivity(businessId, request.resource.data);
+          allow update, delete: if isBusinessOwner(businessId);
+        }
+      }
+
+      match /purchases/{purchaseId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /purchase_returns/{returnId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow update, delete: if isBusinessOwner(businessId);
+      }
+
+      match /supplier_payments/{paymentId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && canReadBranchData(businessId, effectiveBranchId(resource.data));
+        allow create: if canRecordSupplierActivity(
+          businessId,
+          request.resource.data
+        );
+        allow update, delete: if isBusinessOwner(businessId);
+      }
+
+      match /daily_summaries/{dateKey} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'view_daily_summary')
+          || hasBusinessPermission(businessId, 'view_sales_reports');
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /weekly_summaries/{weekKey} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'view_weekly_report')
+          || hasBusinessPermission(businessId, 'view_sales_reports');
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /end_of_day/{dateKey} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'view_end_of_day_alerts')
+          || hasBusinessPermission(businessId, 'view_sales_reports')
+          || hasBusinessPermission(businessId, 'complete_sales');
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      // Unanswered Sabi questions for later training / routing improvements.
+      match /sabi_unanswered/{askId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow delete: if isBusinessOwner(businessId);
       }
 
       // Sales, products, customers, expenses, activity and other
       // business subcollections.
       match /{document=**} {
+        // Unknown business subcollections are readable to active members only.
+        // Writes must be explicitly authorized above so this fallback cannot
+        // bypass branch, membership, inventory, or accounting rules.
         allow read: if isBusinessOwner(businessId)
-          || isActiveBusinessMember(businessId);
-
-        allow create, update, delete: if isBusinessOwner(businessId);
+          || (isActiveBusinessMember(businessId)
+            && (
+              !hasExplicitBranchId(resource.data)
+              || canReadBranchData(businessId, effectiveBranchId(resource.data))
+            ));
+        allow write: if false;
       }
     }
   }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../core/services/onboarding_service.dart';
 import '../domain/onboarding_item.dart';
 import 'widgets/onboarding_page.dart';
 
@@ -26,6 +27,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   );
 
   final PageController _pageController = PageController();
+  final _onboarding = OnboardingService();
   var _currentPage = 0;
   var _isNavigating = false;
   var _didPrecacheImages = false;
@@ -33,21 +35,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _items = <OnboardingItem>[
     OnboardingItem(
       imagePath: 'assets/images/slide-1.png',
-      title: 'Your Business in Your Pocket',
+      title: 'Your business in one place',
       description:
-          'Record sales, track stock, manage customers and monitor expenses—all from one simple app.',
+          'SabiBom helps you record sales, create receipts, track stock, manage expenses and understand your business.',
     ),
     OnboardingItem(
       imagePath: 'assets/images/slide-2.png',
-      title: 'Know Your Business. Grow Smarter.',
+      title: 'Clear numbers you can trust',
       description:
-          'See your sales, expenses, customers and business performance clearly, wherever you are.',
+          'See sales, stock, customers and expenses clearly. Totals come from your real business records.',
     ),
     OnboardingItem(
       imagePath: 'assets/images/slide-3.png',
-      title: 'Just Speak. SabiBom Does the Rest.',
+      title: 'Meet Sabi',
       description:
-          'Use voice commands to record sales and print receipts instantly—faster service, fewer mistakes and happier customers.',
+          'Sabi helps you prepare business records and understand verified business information. You always review before anything is saved.',
     ),
   ];
 
@@ -84,11 +86,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
+  Future<void> _finishAndGo(String route) async {
+    if (_isNavigating) return;
+    setState(() => _isNavigating = true);
+    await _onboarding.complete();
+    if (!mounted) return;
+    context.go(route);
+  }
+
   Future<void> _handlePrimaryAction() async {
     if (_isNavigating) return;
     if (_currentPage == _items.length - 1) {
-      setState(() => _isNavigating = true);
-      context.go(AppRoutes.register);
+      await _finishAndGo(AppRoutes.register);
       return;
     }
 
@@ -101,9 +110,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _goToLogin() {
-    if (_isNavigating) return;
-    setState(() => _isNavigating = true);
-    context.go(AppRoutes.login);
+    _finishAndGo(AppRoutes.login);
   }
 
   @override

@@ -101,6 +101,9 @@ class SaleCartController extends Notifier<SaleCartState> {
     required String name,
     required double quantity,
     required double unitPrice,
+    String unit = 'unit',
+    String? quantityInput,
+    String? unitPriceInput,
     double discount = 0,
     String? note,
   }) {
@@ -109,19 +112,32 @@ class SaleCartController extends Notifier<SaleCartState> {
       return 'Enter an item name with at least two characters.';
     }
     if (!quantity.isFinite || quantity <= 0) {
-      return 'Quantity must be greater than zero.';
+      return 'Quantity must include a number greater than zero (e.g. 2 bags).';
     }
     if (!unitPrice.isFinite || unitPrice < 0) {
       return 'Unit price cannot be negative.';
     }
+    final priceText = unitPriceInput?.trim();
+    if ((priceText == null || priceText.isEmpty) && unitPrice < 0) {
+      return 'Enter a unit price, or text like paid.';
+    }
     if (!discount.isFinite || discount < 0) {
       return 'Discount cannot be negative.';
     }
+    final recordedQty = quantityInput?.trim();
+    final recordedPrice = priceText == null || priceText.isEmpty
+        ? null
+        : priceText;
     final item = SaleItem(
       saleItemId: _uuid.v4(),
       productId: null,
       isCustomItem: true,
       name: trimmedName,
+      unit: unit.trim().isEmpty ? 'unit' : unit.trim(),
+      quantityInput: recordedQty == null || recordedQty.isEmpty
+          ? null
+          : recordedQty,
+      unitPriceInput: recordedPrice,
       quantity: quantity,
       unitPriceMinor: moneyToMinor(unitPrice),
       trackStock: false,
@@ -133,14 +149,38 @@ class SaleCartController extends Notifier<SaleCartState> {
     return null;
   }
 
-  void setQuantity(String itemId, double quantity) {
+  void setQuantity(
+    String itemId,
+    double quantity, {
+    String? unit,
+    String? quantityInput,
+  }) {
     if (!quantity.isFinite || quantity <= 0) {
       removeItem(itemId);
       return;
     }
     final index = state.items.indexWhere((item) => item.saleItemId == itemId);
     if (index >= 0) {
-      _replaceItem(index, state.items[index].copyWith(quantity: quantity));
+      final current = state.items[index];
+      final nextUnit = (unit ?? current.unit).trim();
+      final recorded = quantityInput?.trim();
+      final nextInput = recorded != null && recorded.isNotEmpty
+          ? recorded
+          : (nextUnit.isEmpty || nextUnit.toLowerCase() == 'unit'
+                ? (quantity == quantity.roundToDouble()
+                      ? '${quantity.toInt()}'
+                      : quantity.toStringAsFixed(2))
+                : (quantity == quantity.roundToDouble()
+                      ? '${quantity.toInt()} $nextUnit'
+                      : '${quantity.toStringAsFixed(2)} $nextUnit'));
+      _replaceItem(
+        index,
+        current.copyWith(
+          quantity: quantity,
+          unit: nextUnit.isEmpty ? 'unit' : nextUnit,
+          quantityInput: nextInput,
+        ),
+      );
     }
   }
 

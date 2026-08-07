@@ -2,6 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
+import '../../core/theme/app_spacing.dart';
 
 class ModernBottomNavigation extends StatelessWidget {
   const ModernBottomNavigation({
@@ -49,16 +52,10 @@ class ModernBottomNavigation extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: const Color(0xFFECECF2)),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x14000000),
-                blurRadius: 24,
-                offset: Offset(0, 8),
-              ),
-            ],
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(AppRadii.pill),
+            border: Border.all(color: context.borderColor),
+            boxShadow: context.floatingShadow,
           ),
           child: SizedBox(
             height: 72,
@@ -66,10 +63,12 @@ class ModernBottomNavigation extends StatelessWidget {
               children: List<Widget>.generate(
                 _items.length,
                 (index) => Expanded(
-                  child: _BottomNavigationDestination(
-                    item: _items[index],
-                    selected: selectedIndex == index,
-                    onTap: () => onDestinationSelected(index),
+                  child: RepaintBoundary(
+                    child: _BottomNavigationDestination(
+                      item: _items[index],
+                      selected: selectedIndex == index,
+                      onTap: () => onDestinationSelected(index),
+                    ),
                   ),
                 ),
               ),
@@ -94,7 +93,11 @@ class _BottomNavigationDestination extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = selected ? AppColors.primary : const Color(0xFF7A7F91);
+    final iconColor = selected
+        ? Theme.of(context).colorScheme.primary
+        : (context.isDarkTheme
+              ? const Color(0xFF8A90A5)
+              : const Color(0xFF7A7F91));
     return Semantics(
       button: true,
       selected: selected,
@@ -108,23 +111,21 @@ class _BottomNavigationDestination extends StatelessWidget {
             onTap: onTap,
             child: Center(
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                width: 54,
+                duration: AppMotion.resolve(context, AppMotion.standard),
+                curve: AppMotion.curve,
+                width: double.infinity,
                 height: 54,
-                padding: const EdgeInsets.symmetric(vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
                 decoration: BoxDecoration(
-                  color: selected
-                      ? const Color(0xFFEEE9FF)
-                      : Colors.transparent,
+                  color: selected ? context.brandTint : Colors.transparent,
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
                     AnimatedScale(
-                      duration: const Duration(milliseconds: 240),
-                      curve: Curves.easeOutCubic,
+                      duration: AppMotion.resolve(context, AppMotion.standard),
+                      curve: AppMotion.curve,
                       scale: selected ? 1.08 : 1,
                       child: Icon(
                         selected ? item.selectedIcon : item.icon,
@@ -132,17 +133,22 @@ class _BottomNavigationDestination extends StatelessWidget {
                         color: iconColor,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 240),
-                      curve: Curves.easeOutCubic,
-                      width: selected ? 12 : 4,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.primary
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(999),
+                    const SizedBox(height: 2),
+                    SizedBox(
+                      height: 14,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          item.label,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: iconColor,
+                            fontSize: 10,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
                       ),
                     ),
                   ],

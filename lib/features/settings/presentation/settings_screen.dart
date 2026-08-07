@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../app/theme_mode_provider.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_list_primitives.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../../core/widgets/app_tab_page_scaffold.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/application/user_profile_provider.dart';
 
@@ -21,30 +25,126 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          AppTabChrome.bottomInset + AppSpacing.md,
+        ),
         children: <Widget>[
           const Center(child: AppLogo(size: 72)),
           const SizedBox(height: AppSpacing.lg),
-          Card(
-            child: ListTile(
-              title: const Text('Business profile'),
-              subtitle: Text(
-                hasBusiness
-                    ? profile?.businessName ?? 'Business set up'
-                    : setupInProgress
-                    ? 'Setup incomplete'
-                    : 'Not set up',
+          const AppSectionHeader('Business'),
+          AppSectionCard(
+            children: [
+              ListTile(
+                leading: Icon(
+                  Icons.storefront_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text('Business profile'),
+                subtitle: Text(
+                  hasBusiness
+                      ? profile?.businessName ?? 'Business set up'
+                      : setupInProgress
+                      ? 'Setup incomplete'
+                      : 'Not set up',
+                ),
+                trailing: Icon(
+                  Icons.chevron_right,
+                  color: context.mutedTextColor,
+                ),
+                onTap: () => context.push(
+                  hasBusiness
+                      ? AppRoutes.businessProfile
+                      : AppRoutes.businessSetup,
+                ),
               ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push(
-                hasBusiness ? AppRoutes.businessProfile : AppRoutes.businessSetup,
+              Divider(height: 1, indent: 56, color: context.borderColor),
+              ListTile(
+                leading: Icon(
+                  Icons.store_mall_directory_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text('Business branches'),
+                subtitle: const Text('Create and manage branch locations'),
+                trailing: Icon(
+                  Icons.chevron_right,
+                  color: context.mutedTextColor,
+                ),
+                onTap: () => context.pushNamed(AppRouteNames.settingsBranches),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          const Card(child: ListTile(title: Text('Notifications'))),
-          const SizedBox(height: AppSpacing.sm),
-          const Card(child: ListTile(title: Text('Data and privacy'))),
+          const SizedBox(height: AppSpacing.md),
+          const AppSectionHeader('Appearance'),
+          AppSectionCard(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.sm + 4,
+              AppSpacing.md,
+              AppSpacing.md,
+            ),
+            children: [
+              SegmentedButton<ThemeMode>(
+                segments: const <ButtonSegment<ThemeMode>>[
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    label: Text('Light'),
+                    icon: Icon(Icons.light_mode_outlined),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    label: Text('Dark'),
+                    icon: Icon(Icons.dark_mode_outlined),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    label: Text('Auto'),
+                    icon: Icon(Icons.brightness_auto_outlined),
+                  ),
+                ],
+                selected: <ThemeMode>{ref.watch(themeModeProvider)},
+                onSelectionChanged: (selection) => ref
+                    .read(themeModeProvider.notifier)
+                    .setMode(selection.first),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const AppSectionHeader('Preferences'),
+          AppSectionCard(
+            children: [
+              ListTile(
+                leading: Icon(
+                  Icons.notifications_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text('Notifications'),
+                subtitle: const Text('Choose which alerts you receive'),
+                trailing: Icon(
+                  Icons.chevron_right,
+                  color: context.mutedTextColor,
+                ),
+                onTap: () =>
+                    context.pushNamed(AppRouteNames.settingsNotifications),
+              ),
+              Divider(height: 1, indent: 56, color: context.borderColor),
+              ListTile(
+                leading: Icon(
+                  Icons.privacy_tip_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text('Data and privacy'),
+                subtitle: const Text('Security, privacy policy and terms'),
+                trailing: Icon(
+                  Icons.chevron_right,
+                  color: context.mutedTextColor,
+                ),
+                onTap: () => context.pushNamed(AppRouteNames.settingsSecurity),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.lg),
           OutlinedButton.icon(
             onPressed: () async {

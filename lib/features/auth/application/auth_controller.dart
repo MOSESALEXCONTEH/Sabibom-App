@@ -4,7 +4,9 @@ import '../data/auth_repository.dart';
 import '../domain/app_user.dart';
 import '../domain/auth_failure.dart';
 
-final authRepositoryProvider = Provider<AuthRepository>((ref) => AuthRepository());
+final authRepositoryProvider = Provider<AuthRepository>(
+  (ref) => AuthRepository(),
+);
 
 enum AuthOperation { email, google, facebook }
 
@@ -19,7 +21,8 @@ class AuthState {
   final String? errorMessage;
   final AppUser? user;
 
-  bool isLoading(AuthOperation operation) => activeOperations.contains(operation);
+  bool isLoading(AuthOperation operation) =>
+      activeOperations.contains(operation);
 
   AuthState copyWith({
     Set<AuthOperation>? activeOperations,
@@ -47,7 +50,11 @@ class AuthController extends Notifier<AuthState> {
     ),
   );
 
-  Future<void> registerWithEmail(String fullName, String email, String password) => _run(
+  Future<void> registerWithEmail(
+    String fullName,
+    String email,
+    String password,
+  ) => _run(
     AuthOperation.email,
     () async => _completeUser(
       await _repository.registerWithEmail(
@@ -77,7 +84,10 @@ class AuthController extends Notifier<AuthState> {
     state = const AuthState();
   }
 
-  Future<void> _run(AuthOperation operation, Future<void> Function() action) async {
+  Future<void> _run(
+    AuthOperation operation,
+    Future<void> Function() action,
+  ) async {
     if (state.isLoading(operation)) {
       return;
     }
@@ -94,10 +104,7 @@ class AuthController extends Notifier<AuthState> {
   }
 
   void _completeUser(AppUser user) {
-    state = state.copyWith(
-      user: user,
-      clearError: true,
-    );
+    state = state.copyWith(user: user, clearError: true);
   }
 
   void _setLoading(AuthOperation operation, bool isLoading) {
@@ -111,4 +118,6 @@ class AuthController extends Notifier<AuthState> {
   }
 }
 
-final authControllerProvider = NotifierProvider<AuthController, AuthState>(AuthController.new);
+final authControllerProvider = NotifierProvider<AuthController, AuthState>(
+  AuthController.new,
+);

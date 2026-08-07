@@ -1,0 +1,26 @@
+﻿{
+  "name": "sabibom-functions",
+  "description": "SabiBom secure Cloud Functions",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint --ext .ts src || true",
+    "test": "npm run build && node --test lib/sabi/schemas.test.js",
+    "test:firestore-rules": "firebase emulators:exec --only firestore \"node --test test/firestore.rules.phase2.test.js\"",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "engines": { "node": "20" },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "@types/node": "^22.10.5",
+    "firebase": "^11.0.2",
+    "typescript": "^5.7.2"
+  },
+  "private": true
+}

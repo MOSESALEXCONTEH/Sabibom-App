@@ -49,6 +49,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '939523940329',
     projectId: 'sabibom-app',
     authDomain: 'sabibom-app.firebaseapp.com',
+    databaseURL: 'https://sabibom-app-default-rtdb.firebaseio.com',
     storageBucket: 'sabibom-app.firebasestorage.app',
     measurementId: 'G-TVF4CTQZ8T',
   );
@@ -58,6 +59,7 @@ class DefaultFirebaseOptions {
     appId: '1:939523940329:android:9c1a8cd7ef0a07e5f03578',
     messagingSenderId: '939523940329',
     projectId: 'sabibom-app',
+    databaseURL: 'https://sabibom-app-default-rtdb.firebaseio.com',
     storageBucket: 'sabibom-app.firebasestorage.app',
   );
   static const FirebaseOptions ios = FirebaseOptions(

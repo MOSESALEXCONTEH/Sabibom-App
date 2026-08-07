@@ -9,14 +9,14 @@ class AuthFailure implements Exception {
       'network-request-failed': 'Check your internet connection and try again.',
       'account-exists-with-different-credential':
           'An account already exists using another sign-in method. Sign in using that method first, then connect Facebook from Settings.',
-        'credential-already-in-use':
+      'credential-already-in-use':
           'This Facebook account is already connected to another account.',
       'invalid-credential': 'Your sign-in details are not valid. Try again.',
       'user-disabled':
           'This account has been disabled. Contact support for help.',
       'too-many-requests':
           'Too many attempts. Please wait before trying again.',
-        'operation-not-allowed':
+      'operation-not-allowed':
           'This sign-in method is not enabled yet. Please try again later.',
       'email-already-in-use':
           'An account already exists with this email address.',

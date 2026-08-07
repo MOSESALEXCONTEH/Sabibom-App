@@ -5,19 +5,21 @@ class DateRange {
   final DateTime end;
 }
 
-enum DashboardPeriod { today, week, month }
+enum DashboardPeriod { today, week, month, year }
 
 extension DashboardPeriodLabel on DashboardPeriod {
   String get label => switch (this) {
     DashboardPeriod.today => 'Today',
-    DashboardPeriod.week => 'This Week',
-    DashboardPeriod.month => 'This Month',
+    DashboardPeriod.week => 'Week',
+    DashboardPeriod.month => 'Month',
+    DashboardPeriod.year => 'Year',
   };
 
   String get salesLabel => switch (this) {
     DashboardPeriod.today => "Today's Sales",
     DashboardPeriod.week => "This Week's Sales",
     DashboardPeriod.month => "This Month's Sales",
+    DashboardPeriod.year => "This Year's Sales",
   };
 }
 
@@ -34,6 +36,10 @@ DateRange dashboardDateRange(DashboardPeriod period, {DateTime? now}) {
     DashboardPeriod.month => DateRange(
       start: DateTime(local.year, local.month),
       end: DateTime(local.year, local.month + 1),
+    ),
+    DashboardPeriod.year => DateRange(
+      start: DateTime(local.year),
+      end: DateTime(local.year + 1),
     ),
   };
 }

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import '../domain/business.dart';
 import '../domain/business_member.dart';
 import '../domain/business_setup_data.dart';
+import '../../branches/domain/business_branch.dart';
+import '../../team/domain/app_permission.dart';
 import 'business_repository.dart';
 
 class BusinessSetupException implements Exception {
@@ -50,8 +52,9 @@ class FirestoreBusinessRepository implements BusinessRepository {
             (userSnapshot.data()?['activeBusinessId'] as String?)?.trim();
 
         if (activeBusinessId != null && activeBusinessId.isNotEmpty) {
-          final existingBusinessSnapshot =
-              await transaction.get(_businessDocument(activeBusinessId));
+          final existingBusinessSnapshot = await transaction.get(
+            _businessDocument(activeBusinessId),
+          );
           if (existingBusinessSnapshot.exists) {
             // Business already exists, return early.
             return BusinessSetupResult(
@@ -68,6 +71,8 @@ class FirestoreBusinessRepository implements BusinessRepository {
           data: data,
         );
         final ownerMember = BusinessMember.owner(uid);
+        final ownerPermissions =
+            AppPermission.values.map((p) => p.code).toList();
 
         // 1. Create business document
         transaction.set(businessDoc, {
@@ -79,22 +84,35 @@ class FirestoreBusinessRepository implements BusinessRepository {
         // 2. Create owner membership document
         transaction.set(memberDoc, {
           ...ownerMember.toMap(),
+          'uid': uid,
+          'businessId': businessId,
+          'roleId': 'owner',
+          'roleName': 'Owner',
+          'isOwner': true,
+          'permissions': ownerPermissions,
           'joinedAt': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
 
-        // 3. Update user document
         transaction.set(
-          userDoc,
-          <String, Object?>{
-            'activeBusinessId': businessId,
-            'businessName': business.name,
-            'businessSetupStatus': 'completed',
-            'businessSetupCompleted': true,
-            'businessSetupPromptSeen': true,
-            'updatedAt': FieldValue.serverTimestamp(),
+          businessDoc.collection('branches').doc('main'),
+          {
+            ...BusinessBranch.main(businessId: businessId, createdBy: uid)
+                .toMap(forCreate: true),
+            'updatedBy': uid,
           },
-          SetOptions(merge: true),
         );
+
+        // 3. Update user document
+        transaction.set(userDoc, <String, Object?>{
+          'activeBusinessId': businessId,
+          'businessName': business.name,
+          'businessSetupStatus': 'completed',
+          'businessSetupCompleted': true,
+          'businessSetupPromptSeen': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
 
         return BusinessSetupResult(businessId: businessId, wasExisting: false);
       });

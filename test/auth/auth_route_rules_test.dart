@@ -2,10 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sabibom/features/auth/application/auth_route_rules.dart';
 
 const _guestRoutes = <String>{'/login', '/register', '/onboarding'};
-const _protectedRoutes = <String>{
-  '/dashboard',
-  '/settings',
-};
+const _protectedRoutes = <String>{'/dashboard', '/settings'};
 
 void main() {
   test('keeps guest routes accessible while logged out', () {

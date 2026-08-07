@@ -598,6 +598,7 @@ class FirestoreSalesRepository implements SalesRepository {
       await StockAlertService().evaluateProduct(
         businessId: businessId,
         businessName: businessName,
+        branchId: request.branchId,
         product: product,
       );
     }
@@ -618,6 +619,7 @@ class FirestoreSalesRepository implements SalesRepository {
       await OperationalAlertService().onCustomerCreditCreated(
         businessId: businessId,
         businessName: businessName,
+        branchId: request.branchId,
         customerId: customerId,
         customerName:
             (customerSnap.data()?['name'] as String?) ??

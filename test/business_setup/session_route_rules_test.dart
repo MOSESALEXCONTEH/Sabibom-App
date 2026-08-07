@@ -1,17 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sabibom/app/session_route_rules.dart';
 
-const _guestRoutes = <String>{
-  '/onboarding',
-  '/login',
-  '/register',
-};
+const _guestRoutes = <String>{'/onboarding', '/login', '/register'};
 
-const _protectedRoutes = <String>{
-  '/dashboard',
-  '/settings',
-  '/business-setup',
-};
+const _protectedRoutes = <String>{'/dashboard', '/settings', '/business-setup'};
 
 void main() {
   test('unresolved session stays on splash', () {

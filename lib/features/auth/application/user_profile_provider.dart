@@ -19,12 +19,15 @@ class UserProfile {
   final String? businessName;
   final String? fullName;
 
-  factory UserProfile.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot) {
+  factory UserProfile.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> snapshot,
+  ) {
     final data = snapshot.data() ?? {};
     final legacyCompleted = data['businessSetupCompleted'] == true;
     return UserProfile(
       uid: snapshot.id,
-      businessSetupStatus: (data['businessSetupStatus'] as String?) ??
+      businessSetupStatus:
+          (data['businessSetupStatus'] as String?) ??
           (legacyCompleted ? 'completed' : 'not_started'),
       businessSetupPromptSeen: data['businessSetupPromptSeen'] == true,
       activeBusinessId: data['activeBusinessId'] as String?,
@@ -44,7 +47,10 @@ final currentUserProfileProvider = StreamProvider<UserProfile?>((ref) {
       .collection('users')
       .doc(user.uid)
       .snapshots()
-      .map((snapshot) => snapshot.exists ? UserProfile.fromFirestore(snapshot) : null);
+      .map(
+        (snapshot) =>
+            snapshot.exists ? UserProfile.fromFirestore(snapshot) : null,
+      );
 });
 
 Future<void> updateBusinessSetupPreference({
@@ -53,13 +59,13 @@ Future<void> updateBusinessSetupPreference({
 }) {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return Future<void>.value();
-  return FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-    <String, Object?>{
-      'businessSetupStatus': status,
-      'businessSetupPromptSeen': promptSeen,
-      if (status == 'skipped') 'businessSetupCompleted': false,
-      'updatedAt': FieldValue.serverTimestamp(),
-    },
-    SetOptions(merge: true),
-  );
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .set(<String, Object?>{
+        'businessSetupStatus': status,
+        'businessSetupPromptSeen': promptSeen,
+        if (status == 'skipped') 'businessSetupCompleted': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 }
