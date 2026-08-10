@@ -8,7 +8,13 @@ const {
   assertFails,
   assertSucceeds,
 } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, getDoc, updateDoc } = require('firebase/firestore');
+const {
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  writeBatch,
+} = require('firebase/firestore');
 
 const projectId = 'sabibom-phase2-rules';
 const rules = readFileSync(resolve(__dirname, '../../firestore.rules'), 'utf8');
@@ -156,6 +162,70 @@ async function seedBusinessData() {
     });
   });
 }
+
+test('new owner can atomically create business, membership, and main branch', async () => {
+  const db = testEnv.authenticatedContext('newOwner').firestore();
+  const batch = writeBatch(db);
+
+  batch.set(doc(db, 'businesses/newBiz'), {
+    businessId: 'newBiz',
+    ownerId: 'newOwner',
+    name: 'New Business',
+  });
+  batch.set(doc(db, 'businesses/newBiz/members/newOwner'), {
+    userId: 'newOwner',
+    uid: 'newOwner',
+    businessId: 'newBiz',
+    role: 'owner',
+    roleId: 'owner',
+    isOwner: true,
+    status: 'active',
+  });
+  batch.set(doc(db, 'businesses/newBiz/branches/main'), {
+    branchId: 'main',
+    businessId: 'newBiz',
+    name: 'Main Branch',
+    code: 'MAIN',
+    isMainBranch: true,
+    status: 'active',
+    createdBy: 'newOwner',
+  });
+  batch.set(doc(db, 'users/newOwner'), {
+    activeBusinessId: 'newBiz',
+    businessSetupCompleted: true,
+  });
+
+  await assertSucceeds(batch.commit());
+  const branch = await getDoc(doc(db, 'businesses/newBiz/branches/main'));
+  assert.equal(branch.data().businessId, 'newBiz');
+});
+
+test('initial main branch setup cannot spoof its creator', async () => {
+  const db = testEnv.authenticatedContext('secondOwner').firestore();
+  const batch = writeBatch(db);
+
+  batch.set(doc(db, 'businesses/secondBiz'), {
+    businessId: 'secondBiz',
+    ownerId: 'secondOwner',
+    name: 'Second Business',
+  });
+  batch.set(doc(db, 'businesses/secondBiz/members/secondOwner'), {
+    userId: 'secondOwner',
+    role: 'owner',
+    status: 'active',
+  });
+  batch.set(doc(db, 'businesses/secondBiz/branches/main'), {
+    branchId: 'main',
+    businessId: 'secondBiz',
+    name: 'Main Branch',
+    code: 'MAIN',
+    isMainBranch: true,
+    status: 'active',
+    createdBy: 'anotherUser',
+  });
+
+  await assertFails(batch.commit());
+});
 
 test('owner can create a branch in own business', async () => {
   await seedBusinessData();

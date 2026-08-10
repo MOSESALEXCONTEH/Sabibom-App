@@ -191,6 +191,23 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/businesses/$(businessId)/branches/$(branchId));
     }
 
+    function isInitialMainBranchSetup(businessId, branchId) {
+      return signedIn()
+        && branchId == 'main'
+        && !exists(
+          /databases/$(database)/documents/businesses/$(businessId)
+        )
+        && getAfter(
+          /databases/$(database)/documents/businesses/$(businessId)
+        ).data.ownerId == request.auth.uid
+        && getAfter(
+          /databases/$(database)/documents/businesses/$(businessId)
+        ).data.businessId == businessId
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.isMainBranch == true
+        && request.resource.data.status == 'active';
+    }
+
     function branchIsActive(businessId, branchId) {
       return branchExists(businessId, branchId)
         && branchDoc(businessId, branchId).data.status == 'active';
@@ -503,7 +520,10 @@ service cloud.firestore {
         allow read: if hasBranchAccess(businessId, branchId)
           || canViewAllBranches(businessId);
 
-        allow create: if canManageBranches(businessId)
+        allow create: if (
+            canManageBranches(businessId)
+            || isInitialMainBranchSetup(businessId, branchId)
+          )
           && request.resource.data.businessId == businessId
           && request.resource.data.branchId == branchId
           && request.resource.data.name is string
