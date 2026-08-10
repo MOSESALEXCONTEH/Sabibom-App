@@ -3,6 +3,21 @@ import 'package:sabibom/features/sales/domain/sale.dart';
 import 'package:sabibom/features/sales/domain/sale_models.dart';
 
 void main() {
+  test('untracked service remains available without stock', () {
+    final service = SaleProduct.fromFirestore('service-1', <String, dynamic>{
+      'name': 'Haircut',
+      'sellingPriceMinor': 5000,
+      'quantity': 0,
+      'trackStock': false,
+      'status': 'active',
+      'unit': 'Service',
+    });
+
+    expect(service.isActive, isTrue);
+    expect(service.isOutOfStock, isFalse);
+    expect(service.trackStock, isFalse);
+  });
+
   test('sale from map prefers provided document id', () {
     final sale = Sale.fromMap('doc-123', <String, dynamic>{
       'saleId': 'legacy-id',

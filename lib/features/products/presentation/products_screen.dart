@@ -10,6 +10,7 @@ import '../../../core/widgets/app_summary_strip.dart';
 import '../../../core/widgets/app_tab_page_scaffold.dart';
 import '../../../core/widgets/list_bulk_actions.dart';
 import '../../dashboard/application/dashboard_providers.dart';
+import '../../business_setup/application/business_experience_providers.dart';
 import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
 import '../application/products_providers.dart';
@@ -40,16 +41,22 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
   @override
   Widget build(BuildContext context) {
     final active = ref.watch(activeBusinessProvider);
+    final terminology = ref.watch(currentBusinessTerminologyProvider);
+    final capabilities = ref.watch(currentBusinessCapabilitiesProvider);
     final hasBusiness = active.asData?.value is ActiveBusinessData;
     final businessId = switch (active.asData?.value) {
       ActiveBusinessData(:final business) => business.businessId,
       _ => null,
     };
     return AppTabPageScaffold(
-      title: _selectionMode ? '${_selected.length} selected' : 'Products',
+      title: _selectionMode
+          ? '${_selected.length} selected'
+          : terminology.products,
       subtitle: _selectionMode
-          ? 'Swipe left or select products to archive'
-          : 'Inventory, prices and stock levels',
+          ? 'Swipe left or select ${terminology.products.toLowerCase()} to archive'
+          : capabilities.managesInventory
+          ? 'Inventory, prices and stock levels'
+          : 'Services, prices and availability',
       trailing: hasBusiness
           ? Row(
               mainAxisSize: MainAxisSize.min,
@@ -76,7 +83,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
               heroTag: 'fab-new-product',
               onPressed: () => context.pushNamed(AppRouteNames.newProduct),
               icon: const Icon(Icons.add),
-              label: const Text('Add Product'),
+              label: Text('Add ${terminology.product}'),
             )
           : null,
       body: active.when(
@@ -148,11 +155,13 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
 
   Future<void> _bulkArchive(String businessId) async {
     if (_selected.isEmpty) return;
+    final terminology = ref.read(currentBusinessTerminologyProvider);
     final ok = await confirmListDelete(
       context,
-      title: 'Archive ${_selected.length} products?',
+      title:
+          'Archive ${_selected.length} ${terminology.products.toLowerCase()}?',
       message:
-          'Selected products will be archived and hidden from active sales.',
+          'Selected ${terminology.products.toLowerCase()} will be archived and hidden from active transactions.',
       confirmLabel: 'Archive',
     );
     if (!ok) return;
@@ -224,13 +233,15 @@ class _ProductsBody extends ConsumerWidget {
       hasPermissionProvider(AppPermission.archiveProduct),
     );
     final showProfit = canViewProfit && canViewCost;
+    final terminology = ref.watch(currentBusinessTerminologyProvider);
+    final capabilities = ref.watch(currentBusinessCapabilitiesProvider);
 
     return productsAsync.when(
       loading: () => const AppListSkeleton(
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       ),
       error: (_, _) => AppErrorState(
-        message: 'Could not load products.',
+        message: 'Could not load ${terminology.products.toLowerCase()}.',
         onRetry: () => ref.invalidate(productsListProvider(businessId)),
       ),
       data: (products) {
@@ -265,11 +276,11 @@ class _ProductsBody extends ConsumerWidget {
 
         if (products.isEmpty) {
           return AppEmptyState(
-            title: 'No products yet',
+            title: 'No ${terminology.products.toLowerCase()} yet',
             description:
-                'Add products or services so you can select them while recording sales.',
+                'Add ${terminology.products.toLowerCase()} so you can select them while recording transactions.',
             icon: Icons.inventory_2_outlined,
-            actionLabel: 'Add Product',
+            actionLabel: 'Add ${terminology.product}',
             actionIcon: Icons.add,
             onAction: () => context.pushNamed(AppRouteNames.newProduct),
           );
@@ -284,19 +295,21 @@ class _ProductsBody extends ConsumerWidget {
                 items: <AppSummaryItem>[
                   AppSummaryItem(
                     icon: Icons.inventory_2_outlined,
-                    label: '$activeCount products',
+                    label: '$activeCount ${terminology.products.toLowerCase()}',
                     color: Theme.of(context).colorScheme.primary,
                   ),
-                  AppSummaryItem(
-                    icon: Icons.circle,
-                    label: '$lowStockCount low stock',
-                    color: Colors.orange,
-                  ),
-                  AppSummaryItem(
-                    icon: Icons.circle,
-                    label: '$expiringCount expiry attention',
-                    color: Colors.redAccent,
-                  ),
+                  if (capabilities.managesInventory) ...<AppSummaryItem>[
+                    AppSummaryItem(
+                      icon: Icons.circle,
+                      label: '$lowStockCount low stock',
+                      color: Colors.orange,
+                    ),
+                    AppSummaryItem(
+                      icon: Icons.circle,
+                      label: '$expiringCount expiry attention',
+                      color: Colors.redAccent,
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
@@ -311,17 +324,27 @@ class _ProductsBody extends ConsumerWidget {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: ProductStockFilter.values.map((value) {
-                    final selected = filter == value;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: AppSpacing.sm),
-                      child: ChoiceChip(
-                        label: Text(_filterLabel(value)),
-                        selected: selected,
-                        onSelected: (_) => onFilterChanged(value),
-                      ),
-                    );
-                  }).toList(),
+                  children:
+                      (capabilities.managesInventory
+                              ? ProductStockFilter.values
+                              : const <ProductStockFilter>[
+                                  ProductStockFilter.all,
+                                  ProductStockFilter.archived,
+                                ])
+                          .map((value) {
+                            final selected = filter == value;
+                            return Padding(
+                              padding: const EdgeInsets.only(
+                                right: AppSpacing.sm,
+                              ),
+                              child: ChoiceChip(
+                                label: Text(_filterLabel(value)),
+                                selected: selected,
+                                onSelected: (_) => onFilterChanged(value),
+                              ),
+                            );
+                          })
+                          .toList(),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -384,6 +407,7 @@ class _ProductsBody extends ConsumerWidget {
                               product: product,
                               currencySymbol: currencySymbol,
                               showProfit: showProfit,
+                              inventoryEnabled: capabilities.managesInventory,
                               onTap: () => context.pushNamed(
                                 AppRouteNames.productDetails,
                                 pathParameters: <String, String>{

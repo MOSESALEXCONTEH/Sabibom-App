@@ -10,6 +10,7 @@ import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_tab_page_scaffold.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../dashboard/application/dashboard_providers.dart';
+import '../../business_setup/application/business_experience_providers.dart';
 import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
 
@@ -49,6 +50,7 @@ class MoreScreen extends ConsumerWidget {
         ? activeBusiness.business
         : null;
     final showTeam = canManageStaff || canAssignBranches || isOwner;
+    final capabilities = ref.watch(currentBusinessCapabilitiesProvider);
 
     final businessItems = <_MoreItem>[
       _MoreItem(
@@ -104,16 +106,18 @@ class MoreScreen extends ConsumerWidget {
         'Expenses',
         () => context.pushNamed(AppRouteNames.expenses),
       ),
-      _MoreItem(
-        Icons.local_shipping_outlined,
-        'Suppliers',
-        () => context.pushNamed(AppRouteNames.suppliers),
-      ),
-      _MoreItem(
-        Icons.shopping_cart_outlined,
-        'Purchases',
-        () => context.pushNamed(AppRouteNames.purchases),
-      ),
+      if (capabilities.managesPurchases) ...<_MoreItem>[
+        _MoreItem(
+          Icons.local_shipping_outlined,
+          'Suppliers',
+          () => context.pushNamed(AppRouteNames.suppliers),
+        ),
+        _MoreItem(
+          Icons.shopping_cart_outlined,
+          'Purchases',
+          () => context.pushNamed(AppRouteNames.purchases),
+        ),
+      ],
       _MoreItem(
         Icons.category_outlined,
         'Expense Categories',
@@ -124,21 +128,23 @@ class MoreScreen extends ConsumerWidget {
         'Printer Settings',
         () => context.pushNamed(AppRouteNames.settingsPrinter),
       ),
-      _MoreItem(
-        Icons.category_outlined,
-        'Categories',
-        () => context.pushNamed(AppRouteNames.settingsCategories),
-      ),
-      _MoreItem(
-        Icons.straighten_outlined,
-        'Units',
-        () => context.pushNamed(AppRouteNames.settingsUnits),
-      ),
-      _MoreItem(
-        Icons.inventory_outlined,
-        'Inventory Settings',
-        () => context.pushNamed(AppRouteNames.settingsInventory),
-      ),
+      if (capabilities.managesInventory) ...<_MoreItem>[
+        _MoreItem(
+          Icons.category_outlined,
+          'Categories',
+          () => context.pushNamed(AppRouteNames.settingsCategories),
+        ),
+        _MoreItem(
+          Icons.straighten_outlined,
+          'Units',
+          () => context.pushNamed(AppRouteNames.settingsUnits),
+        ),
+        _MoreItem(
+          Icons.inventory_outlined,
+          'Inventory Settings',
+          () => context.pushNamed(AppRouteNames.settingsInventory),
+        ),
+      ],
     ];
 
     final reportsItems = <_MoreItem>[

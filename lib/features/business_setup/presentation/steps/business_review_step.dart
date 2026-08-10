@@ -28,6 +28,7 @@ class BusinessReviewStep extends StatelessWidget {
           lines: <String>[
             'Business name: ${data.businessName.trim()}',
             'Business type: ${data.effectiveBusinessType}',
+            'Business system: ${data.operatingModel.displayName}',
             'Owner: ${data.ownerName.trim()}',
           ],
           onEdit: () => onEdit(BusinessSetupStep.businessDetails),

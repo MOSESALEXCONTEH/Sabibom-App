@@ -19,6 +19,7 @@ import '../../../core/widgets/record_date_filter_bar.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../branches/application/branch_query_error.dart';
 import '../../dashboard/application/dashboard_providers.dart';
+import '../../business_setup/application/business_experience_providers.dart';
 import '../application/sale_cart_controller.dart';
 import '../application/sales_providers.dart' as sales;
 import '../data/firestore_sales_repository.dart';
@@ -49,15 +50,18 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final activeBusiness = ref.watch(activeBusinessProvider);
+    final terminology = ref.watch(currentBusinessTerminologyProvider);
     final hasBusiness = activeBusiness.asData?.value is ActiveBusinessData;
     final businessId = switch (activeBusiness.asData?.value) {
       ActiveBusinessData(:final business) => business.businessId,
       _ => null,
     };
     return AppTabPageScaffold(
-      title: _selectionMode ? '${_selected.length} selected' : 'Sales',
+      title: _selectionMode
+          ? '${_selected.length} selected'
+          : terminology.sales,
       subtitle: _selectionMode
-          ? 'Swipe left or select sales to void'
+          ? 'Swipe left or select transactions to void'
           : 'Recent transactions and receipts',
       trailing: hasBusiness
           ? Row(
@@ -85,7 +89,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
               heroTag: 'fab-new-sale',
               onPressed: () => context.push(AppRoutes.newSale),
               icon: const Icon(Icons.add),
-              label: const Text('New Sale'),
+              label: Text('New ${terminology.sale}'),
             )
           : null,
       body: activeBusiness.when(
@@ -419,6 +423,7 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final terminology = ref.watch(currentBusinessTerminologyProvider);
     final activeBusiness = ref.watch(activeBusinessProvider).asData?.value;
     if (activeBusiness is! ActiveBusinessData) {
       return const Scaffold(body: SafeArea(child: _SalesBusinessRequired()));
@@ -442,7 +447,7 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Sale'),
+        title: Text('New ${terminology.sale}'),
         actions: <Widget>[
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -502,7 +507,8 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
               onChanged: (value) => setState(() => _query = value),
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
-                hintText: 'Search products, SKU or barcode',
+                hintText:
+                    'Search ${terminology.products.toLowerCase()}, SKU or barcode',
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[

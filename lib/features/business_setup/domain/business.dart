@@ -1,5 +1,6 @@
 import 'business_branding.dart';
 import 'business_setup_data.dart';
+import 'business_operating_model.dart';
 
 class Business {
   const Business({
@@ -8,6 +9,7 @@ class Business {
     required this.normalizedName,
     required this.ownerId,
     required this.businessType,
+    this.operatingModel = BusinessOperatingModel.product,
     required this.customBusinessType,
     required this.logoUrl,
     required this.phoneNumber,
@@ -44,6 +46,7 @@ class Business {
       normalizedName: _normalizeName(name),
       ownerId: ownerId,
       businessType: data.businessType,
+      operatingModel: data.operatingModel,
       customBusinessType: data.businessType == 'Other'
           ? data.customBusinessType.trim()
           : null,
@@ -70,6 +73,11 @@ class Business {
       normalizedName: data['normalizedName'] as String? ?? '',
       ownerId: data['ownerId'] as String? ?? '',
       businessType: data['businessType'] as String? ?? '',
+      operatingModel: BusinessOperatingModel.fromStorage(
+        data['operatingModel'],
+        businessType: data['businessType'] as String?,
+        customBusinessType: data['customBusinessType'] as String?,
+      ),
       customBusinessType: data['customBusinessType'] as String?,
       logoUrl: _asNullableString(branding.logoUrl ?? data['logoUrl']),
       logoCid: _asNullableString(branding.logoCid ?? data['logoCid']),
@@ -109,6 +117,7 @@ class Business {
   final String normalizedName;
   final String ownerId;
   final String businessType;
+  final BusinessOperatingModel operatingModel;
   final String? customBusinessType;
   final String? logoUrl;
   final String? logoCid;
@@ -139,6 +148,7 @@ class Business {
       'normalizedName': normalizedName,
       'ownerId': ownerId,
       'businessType': businessType,
+      'operatingModel': operatingModel.storedValue,
       'customBusinessType': customBusinessType,
       'logoUrl': logoUrl,
       'logoCid': logoCid,

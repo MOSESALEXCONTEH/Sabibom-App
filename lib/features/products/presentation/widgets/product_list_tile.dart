@@ -14,6 +14,7 @@ class ProductListTile extends StatelessWidget {
     required this.currencySymbol,
     required this.onTap,
     this.showProfit = false,
+    this.inventoryEnabled = true,
     super.key,
   });
 
@@ -21,13 +22,16 @@ class ProductListTile extends StatelessWidget {
   final String currencySymbol;
   final VoidCallback onTap;
   final bool showProfit;
+  final bool inventoryEnabled;
 
   @override
   Widget build(BuildContext context) {
     final imageUrl = product.imageUrl?.trim();
-    final stockLabel = product.trackStock
-        ? '${_qty(product.quantity)} ${product.unit}'
-        : 'Untracked';
+    final stockLabel = inventoryEnabled
+        ? (product.trackStock
+              ? '${_qty(product.quantity)} ${product.unit}'
+              : 'Untracked')
+        : product.unit;
     final priceLabel = formatCurrency(
       minorToMoney(product.sellingPriceMinor),
       symbol: currencySymbol,
@@ -60,8 +64,20 @@ class ProductListTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
-          StockStatusBadge(product: product),
-          if (product.isLowStock)
+          if (inventoryEnabled)
+            StockStatusBadge(product: product)
+          else
+            Text(
+              product.isArchived ? 'Archived' : 'Available',
+              style: TextStyle(
+                color: product.isArchived
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : AppColors.secondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (inventoryEnabled && product.isLowStock)
             const Padding(
               padding: EdgeInsets.only(top: 4),
               child: Text(

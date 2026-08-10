@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sabibom/features/business_setup/domain/business_setup_data.dart';
+import 'package:sabibom/features/business_setup/domain/business.dart';
+import 'package:sabibom/features/business_setup/domain/business_operating_model.dart';
 import 'package:sabibom/features/business_setup/domain/receipt_settings.dart';
 
 void main() {
@@ -23,5 +25,46 @@ void main() {
       customBusinessType: 'Laundry',
     );
     expect(data.effectiveBusinessType, 'Laundry');
+  });
+
+  group('business operating model', () {
+    test('infers service businesses from known and custom types', () {
+      expect(
+        BusinessOperatingModel.inferFromBusinessType('Barber Shop'),
+        BusinessOperatingModel.service,
+      );
+      expect(
+        BusinessOperatingModel.inferFromBusinessType(
+          'Other',
+          customBusinessType: 'Laundry and cleaning',
+        ),
+        BusinessOperatingModel.service,
+      );
+    });
+
+    test('infers hybrid and product businesses conservatively', () {
+      expect(
+        BusinessOperatingModel.inferFromBusinessType('Restaurant'),
+        BusinessOperatingModel.hybrid,
+      );
+      expect(
+        BusinessOperatingModel.inferFromBusinessType('Retail Shop'),
+        BusinessOperatingModel.product,
+      );
+    });
+
+    test('legacy business infers model while stored override wins', () {
+      final legacy = Business.fromFirestore(<String, dynamic>{
+        'businessType': 'Beauty Salon',
+      });
+      final overridden = Business.fromFirestore(<String, dynamic>{
+        'businessType': 'Beauty Salon',
+        'operatingModel': 'hybrid',
+      });
+
+      expect(legacy.operatingModel, BusinessOperatingModel.service);
+      expect(overridden.operatingModel, BusinessOperatingModel.hybrid);
+      expect(overridden.toMap()['operatingModel'], 'hybrid');
+    });
   });
 }

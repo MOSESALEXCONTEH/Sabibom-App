@@ -8,6 +8,7 @@ import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/widgets/barcode_scanner_screen.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../dashboard/application/dashboard_providers.dart';
+import '../../business_setup/application/business_experience_providers.dart';
 import '../../inventory/domain/product_profit_calculator.dart';
 import '../../inventory/domain/stock_quantity_rules.dart';
 import '../../sales/domain/sale_models.dart';
@@ -126,6 +127,14 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
     }
     final businessId = active.business.businessId;
 
+    if (widget.mode == _ProductFormMode.create && !_hydrated) {
+      _hydrated = true;
+      if (active.business.operatingModel.name == 'service') {
+        _trackStock = false;
+        _unit = 'Service';
+      }
+    }
+
     if (widget.mode == _ProductFormMode.edit) {
       final detail = ref.watch(
         productDetailProvider((businessId, widget.productId!)),
@@ -155,8 +164,12 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
 
   Widget _buildForm(BuildContext context, String businessId) {
     final isEdit = widget.mode == _ProductFormMode.edit;
+    final terminology = ref.watch(currentBusinessTerminologyProvider);
+    final capabilities = ref.watch(currentBusinessCapabilitiesProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? 'Edit Product' : 'Add Product')),
+      appBar: AppBar(
+        title: Text('${isEdit ? 'Edit' : 'Add'} ${terminology.product}'),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -165,7 +178,9 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
             children: <Widget>[
               TextFormField(
                 controller: _name,
-                decoration: const InputDecoration(labelText: 'Product name *'),
+                decoration: InputDecoration(
+                  labelText: '${terminology.product} name *',
+                ),
                 textCapitalization: TextCapitalization.words,
                 validator: (value) {
                   if ((value ?? '').trim().length < 2) {
@@ -242,12 +257,13 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
                 },
               ),
               const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Track stock'),
-                value: _trackStock,
-                onChanged: (value) => setState(() => _trackStock = value),
-              ),
+              if (capabilities.managesInventory)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Track stock'),
+                  value: _trackStock,
+                  onChanged: (value) => setState(() => _trackStock = value),
+                ),
               if (_trackStock && !isEdit) ...<Widget>[
                 TextFormField(
                   controller: _openingStock,
@@ -431,7 +447,9 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
                 child: Text(
                   _submitting
                       ? 'Saving...'
-                      : (isEdit ? 'Save changes' : 'Create product'),
+                      : (isEdit
+                            ? 'Save changes'
+                            : 'Create ${terminology.product.toLowerCase()}'),
                 ),
               ),
             ],

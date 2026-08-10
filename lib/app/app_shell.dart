@@ -7,6 +7,7 @@ import '../core/services/connectivity_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/widgets/app_status_views.dart';
 import '../features/billing/application/billing_providers.dart';
+import '../features/business_setup/application/business_experience_providers.dart';
 import 'widgets/modern_bottom_navigation.dart';
 
 class AuthenticatedAppShell extends ConsumerWidget {
@@ -20,6 +21,7 @@ class AuthenticatedAppShell extends ConsumerWidget {
     final isOnline = ref.watch(isOnlineProvider).asData?.value ?? true;
     final access = ref.watch(currentBusinessAccessProvider).asData?.value;
     final accessBlocked = access != null && !access.allowed;
+    final terminology = ref.watch(currentBusinessTerminologyProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
           .copyWith(
@@ -52,6 +54,7 @@ class AuthenticatedAppShell extends ConsumerWidget {
           ],
         ),
         bottomNavigationBar: ModernBottomNavigation(
+          terminology: terminology,
           selectedIndex: navigationShell.currentIndex,
           onDestinationSelected: (index) => navigationShell.goBranch(
             index,

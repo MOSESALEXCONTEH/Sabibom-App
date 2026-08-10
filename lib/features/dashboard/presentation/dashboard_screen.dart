@@ -14,6 +14,8 @@ import '../../../core/widgets/app_status_views.dart';
 import '../../../core/widgets/app_tab_page_scaffold.dart';
 import '../../auth/application/user_profile_provider.dart';
 import '../../business_setup/domain/business.dart';
+import '../../business_setup/domain/business_operating_model.dart';
+import '../../business_setup/application/business_experience_providers.dart';
 import '../../notifications/presentation/attention_section.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../branches/presentation/branch_selector.dart';
@@ -114,6 +116,8 @@ class _BusinessDashboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final terminology = BusinessTerminology.forModel(business.operatingModel);
+    final capabilities = BusinessCapabilities(business.operatingModel);
     final period = ref.watch(dashboardPeriodProvider);
     final request = DashboardRequest(
       businessId: business.businessId,
@@ -159,21 +163,32 @@ class _BusinessDashboard extends ConsumerWidget {
               label: 'sales summary',
               onRetry: () => ref.invalidate(dashboardSummaryProvider(request)),
             ),
-            data: (data) => _SalesSummaryCard(summary: data, period: period),
+            data: (data) => _SalesSummaryCard(
+              summary: data,
+              period: period,
+              terminology: terminology,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           summary.when(
             loading: () => const AppCardSkeleton(height: 190),
             error: (_, _) => const SizedBox.shrink(),
-            data: (data) =>
-                _BusinessAnalyticsPanel(summary: data, period: period),
+            data: (data) => _BusinessAnalyticsPanel(
+              summary: data,
+              period: period,
+              terminology: terminology,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           NeedsAttentionSection(businessId: business.businessId),
           const SizedBox(height: AppSpacing.lg),
           const _SectionHeader(title: 'Quick actions'),
           const SizedBox(height: AppSpacing.md),
-          const _QuickActionGrid(enabled: true),
+          _QuickActionGrid(
+            enabled: true,
+            terminology: terminology,
+            capabilities: capabilities,
+          ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionHeader(title: 'Business overview'),
           const SizedBox(height: AppSpacing.md),
@@ -183,23 +198,30 @@ class _BusinessDashboard extends ConsumerWidget {
               label: 'business overview',
               onRetry: () => ref.invalidate(dashboardSummaryProvider(request)),
             ),
-            data: (data) => DashboardMetricGrid(summary: data),
+            data: (data) => DashboardMetricGrid(
+              summary: data,
+              terminology: terminology,
+              capabilities: capabilities,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionHeader(title: 'Finance'),
           const SizedBox(height: AppSpacing.md),
-          const _FinanceShortcuts(),
+          _FinanceShortcuts(capabilities: capabilities),
           const SizedBox(height: AppSpacing.lg),
           _RecentActivitySection(
             businessId: business.businessId,
             currencySymbol: business.currency.symbol,
           ),
           const SizedBox(height: AppSpacing.lg),
-          _LowStockSection(businessId: business.businessId),
-          const SizedBox(height: AppSpacing.lg),
+          if (capabilities.managesInventory) ...<Widget>[
+            _LowStockSection(businessId: business.businessId),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           _CustomerBalancesSection(
             businessId: business.businessId,
             currencySymbol: business.currency.symbol,
+            terminology: terminology,
           ),
           const SizedBox(height: AppSpacing.xl),
         ],
@@ -410,9 +432,14 @@ class _PeriodSelector extends ConsumerWidget {
 }
 
 class _SalesSummaryCard extends StatelessWidget {
-  const _SalesSummaryCard({required this.summary, required this.period});
+  const _SalesSummaryCard({
+    required this.summary,
+    required this.period,
+    required this.terminology,
+  });
   final DashboardSummary summary;
   final DashboardPeriod period;
+  final BusinessTerminology terminology;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -482,7 +509,7 @@ class _SalesSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  period.salesLabel,
+                  period.salesLabel.replaceFirst('Sales', terminology.sales),
                   style: const TextStyle(
                     color: Color(0xDDFFFFFF),
                     fontWeight: FontWeight.w600,
@@ -520,8 +547,8 @@ class _SalesSummaryCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   summary.orderCount == 0
-                      ? 'Start recording sales to see your progress.'
-                      : 'Sales activity for this period.',
+                      ? 'Start recording ${terminology.sales.toLowerCase()} to see your progress.'
+                      : '${terminology.sales} activity for this period.',
                   style: const TextStyle(color: Color(0xCCFFFFFF)),
                 ),
               ],
@@ -551,10 +578,15 @@ class _SalesChartDecoration extends StatelessWidget {
 }
 
 class _BusinessAnalyticsPanel extends StatelessWidget {
-  const _BusinessAnalyticsPanel({required this.summary, required this.period});
+  const _BusinessAnalyticsPanel({
+    required this.summary,
+    required this.period,
+    required this.terminology,
+  });
 
   final DashboardSummary summary;
   final DashboardPeriod period;
+  final BusinessTerminology terminology;
 
   @override
   Widget build(BuildContext context) {
@@ -599,7 +631,7 @@ class _BusinessAnalyticsPanel extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             _AnalyticsBar(
-              label: 'Sales',
+              label: terminology.sales,
               value: money(sales),
               fraction: sales.abs() / scale,
               color: AppColors.primary,
@@ -726,8 +758,17 @@ class _ChartBar extends StatelessWidget {
 }
 
 class DashboardMetricGrid extends StatelessWidget {
-  const DashboardMetricGrid({required this.summary, super.key});
+  const DashboardMetricGrid({
+    required this.summary,
+    this.terminology = const BusinessTerminology.product(),
+    this.capabilities = const BusinessCapabilities(
+      BusinessOperatingModel.product,
+    ),
+    super.key,
+  });
   final DashboardSummary summary;
+  final BusinessTerminology terminology;
+  final BusinessCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -760,27 +801,28 @@ class DashboardMetricGrid extends StatelessWidget {
             onTap: () => context.go(AppRoutes.sales),
           ),
           _MetricCard(
-            label: 'Customers',
+            label: terminology.customers,
             value: '${summary.customerCount}',
             icon: Icons.people_outline,
             accent: const Color(0xFF12B76A),
             detail: summary.customerCount == 0
-                ? 'No customers yet'
-                : 'Saved customers',
+                ? 'No ${terminology.customers.toLowerCase()} yet'
+                : 'Saved ${terminology.customers.toLowerCase()}',
             isCurrency: false,
             onTap: () => context.go(AppRoutes.customers),
           ),
-          _MetricCard(
-            label: 'Low Stock',
-            value: '${summary.lowStockCount}',
-            icon: Icons.warning_amber_outlined,
-            accent: const Color(0xFFF79009),
-            detail: summary.lowStockCount == 0
-                ? 'Stock looks good'
-                : 'Needs attention',
-            isCurrency: false,
-            onTap: () => context.go(AppRoutes.products),
-          ),
+          if (capabilities.managesInventory)
+            _MetricCard(
+              label: 'Low Stock',
+              value: '${summary.lowStockCount}',
+              icon: Icons.warning_amber_outlined,
+              accent: const Color(0xFFF79009),
+              detail: summary.lowStockCount == 0
+                  ? 'Stock looks good'
+                  : 'Needs attention',
+              isCurrency: false,
+              onTap: () => context.go(AppRoutes.products),
+            ),
           _MetricCard(
             label: 'Expenses',
             value: formatCurrency(
@@ -926,7 +968,9 @@ class _AnimatedMetricValue extends StatelessWidget {
 }
 
 class _FinanceShortcuts extends ConsumerWidget {
-  const _FinanceShortcuts();
+  const _FinanceShortcuts({required this.capabilities});
+
+  final BusinessCapabilities capabilities;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -946,92 +990,94 @@ class _FinanceShortcuts extends ConsumerWidget {
     final businessId = active is ActiveBusinessData
         ? active.business.businessId
         : '';
-    final products = businessId.isEmpty
+    final products = businessId.isEmpty || !capabilities.managesInventory
         ? const AsyncValue<List<Product>>.data(<Product>[])
         : ref.watch(productsListProvider(businessId));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        products.when(
-          loading: () => const SizedBox.shrink(),
-          error: (_, _) => const SizedBox.shrink(),
-          data: (items) {
-            final expiring = items
-                .where(
-                  (p) =>
-                      p.tracksExpiry &&
-                      (p.expiryStatus == ProductExpiryStatus.expiringSoon ||
-                          p.expiryStatus == ProductExpiryStatus.expiresToday ||
-                          p.expiringQuantity > 0),
-                )
-                .length;
-            final expired = items
-                .where(
-                  (p) =>
-                      p.tracksExpiry &&
-                      (p.expiredQuantity > 0 ||
-                          p.expiryStatus == ProductExpiryStatus.expired),
-                )
-                .length;
-            final lowStock = items.where((p) => p.isLowStock).length;
-            final stockValue = items.fold<int>(
-              0,
-              (sum, p) => sum + p.stockCostValueMinor,
-            );
-            final expectedRevenue = items.fold<int>(
-              0,
-              (sum, p) => sum + p.expectedStockRevenueMinor,
-            );
-            final potential = items.fold<int>(
-              0,
-              (sum, p) => sum + p.potentialProfitRemainingMinor,
-            );
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                if (canViewExpiry || canViewLowStock(ref))
-                  Card(
-                    child: ListTile(
-                      title: const Text('Inventory attention'),
-                      subtitle: Text(
-                        [
-                          if (canViewExpiry) '$expiring expiring soon',
-                          if (canViewExpiry) '$expired expired',
-                          '$lowStock low stock',
-                        ].join(' · '),
-                      ),
-                      trailing: canViewExpiry
-                          ? TextButton(
-                              onPressed: () => context.pushNamed(
-                                AppRouteNames.reportProductExpiry,
-                              ),
-                              child: const Text('Expiry'),
-                            )
-                          : null,
-                    ),
-                  ),
-                if ((canViewProfit || canViewPotential) && canViewCost)
-                  Card(
-                    child: ListTile(
-                      title: const Text('Profit opportunity'),
-                      subtitle: Text(
-                        'Stock ${formatCurrency(minorToMoney(stockValue))} · '
-                        'Expected ${formatCurrency(minorToMoney(expectedRevenue))} · '
-                        'Est. remaining ${formatCurrency(minorToMoney(potential))}',
-                      ),
-                      trailing: TextButton(
-                        onPressed: () => context.pushNamed(
-                          AppRouteNames.reportProductProfit,
+        if (capabilities.managesInventory)
+          products.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (items) {
+              final expiring = items
+                  .where(
+                    (p) =>
+                        p.tracksExpiry &&
+                        (p.expiryStatus == ProductExpiryStatus.expiringSoon ||
+                            p.expiryStatus ==
+                                ProductExpiryStatus.expiresToday ||
+                            p.expiringQuantity > 0),
+                  )
+                  .length;
+              final expired = items
+                  .where(
+                    (p) =>
+                        p.tracksExpiry &&
+                        (p.expiredQuantity > 0 ||
+                            p.expiryStatus == ProductExpiryStatus.expired),
+                  )
+                  .length;
+              final lowStock = items.where((p) => p.isLowStock).length;
+              final stockValue = items.fold<int>(
+                0,
+                (sum, p) => sum + p.stockCostValueMinor,
+              );
+              final expectedRevenue = items.fold<int>(
+                0,
+                (sum, p) => sum + p.expectedStockRevenueMinor,
+              );
+              final potential = items.fold<int>(
+                0,
+                (sum, p) => sum + p.potentialProfitRemainingMinor,
+              );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  if (canViewExpiry || canViewLowStock(ref))
+                    Card(
+                      child: ListTile(
+                        title: const Text('Inventory attention'),
+                        subtitle: Text(
+                          [
+                            if (canViewExpiry) '$expiring expiring soon',
+                            if (canViewExpiry) '$expired expired',
+                            '$lowStock low stock',
+                          ].join(' · '),
                         ),
-                        child: const Text('Profit'),
+                        trailing: canViewExpiry
+                            ? TextButton(
+                                onPressed: () => context.pushNamed(
+                                  AppRouteNames.reportProductExpiry,
+                                ),
+                                child: const Text('Expiry'),
+                              )
+                            : null,
                       ),
                     ),
-                  ),
-              ],
-            );
-          },
-        ),
+                  if ((canViewProfit || canViewPotential) && canViewCost)
+                    Card(
+                      child: ListTile(
+                        title: const Text('Profit opportunity'),
+                        subtitle: Text(
+                          'Stock ${formatCurrency(minorToMoney(stockValue))} · '
+                          'Expected ${formatCurrency(minorToMoney(expectedRevenue))} · '
+                          'Est. remaining ${formatCurrency(minorToMoney(potential))}',
+                        ),
+                        trailing: TextButton(
+                          onPressed: () => context.pushNamed(
+                            AppRouteNames.reportProductProfit,
+                          ),
+                          child: const Text('Profit'),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -1043,30 +1089,33 @@ class _FinanceShortcuts extends ConsumerWidget {
               onPressed: () =>
                   context.pushNamed(AppRouteNames.reportProfitLoss),
             ),
-            if (canViewProfit || canViewPotential)
+            if (capabilities.managesInventory &&
+                (canViewProfit || canViewPotential))
               ActionChip(
                 avatar: const Icon(Icons.insights_outlined, size: 18),
                 label: const Text('Product Profit'),
                 onPressed: () =>
                     context.pushNamed(AppRouteNames.reportProductProfit),
               ),
-            if (canViewExpiry)
+            if (capabilities.managesInventory && canViewExpiry)
               ActionChip(
                 avatar: const Icon(Icons.event_busy_outlined, size: 18),
                 label: const Text('Expiry Report'),
                 onPressed: () =>
                     context.pushNamed(AppRouteNames.reportProductExpiry),
               ),
-            ActionChip(
-              avatar: const Icon(Icons.local_shipping_outlined, size: 18),
-              label: const Text('Suppliers'),
-              onPressed: () => context.pushNamed(AppRouteNames.suppliers),
-            ),
-            ActionChip(
-              avatar: const Icon(Icons.shopping_cart_outlined, size: 18),
-              label: const Text('Purchases'),
-              onPressed: () => context.pushNamed(AppRouteNames.purchases),
-            ),
+            if (capabilities.managesPurchases) ...<Widget>[
+              ActionChip(
+                avatar: const Icon(Icons.local_shipping_outlined, size: 18),
+                label: const Text('Suppliers'),
+                onPressed: () => context.pushNamed(AppRouteNames.suppliers),
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.shopping_cart_outlined, size: 18),
+                label: const Text('Purchases'),
+                onPressed: () => context.pushNamed(AppRouteNames.purchases),
+              ),
+            ],
             ActionChip(
               avatar: const Icon(Icons.bar_chart_outlined, size: 18),
               label: const Text('Reports'),
@@ -1083,8 +1132,16 @@ class _FinanceShortcuts extends ConsumerWidget {
 }
 
 class _QuickActionGrid extends StatelessWidget {
-  const _QuickActionGrid({required this.enabled});
+  const _QuickActionGrid({
+    required this.enabled,
+    this.terminology = const BusinessTerminology.product(),
+    this.capabilities = const BusinessCapabilities(
+      BusinessOperatingModel.product,
+    ),
+  });
   final bool enabled;
+  final BusinessTerminology terminology;
+  final BusinessCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -1099,22 +1156,24 @@ class _QuickActionGrid extends StatelessWidget {
         children: <Widget>[
           _QuickAction(
             Icons.add_shopping_cart_outlined,
-            'New Sale',
+            'New ${terminology.sale}',
             'Create a new transaction',
             enabled,
             () => context.go(AppRoutes.sales),
           ),
           _QuickAction(
             Icons.add_box_outlined,
-            'Add Product',
-            'Update your inventory',
+            'Add ${terminology.product}',
+            capabilities.managesInventory
+                ? 'Update your inventory'
+                : 'Add to your service list',
             enabled,
             () => context.go(AppRoutes.products),
           ),
           _QuickAction(
             Icons.person_add_alt_outlined,
-            'Add Customer',
-            'Save customer details',
+            'Add ${terminology.customer}',
+            'Save ${terminology.customer.toLowerCase()} details',
             enabled,
             () => context.go(AppRoutes.customers),
           ),
@@ -1399,16 +1458,18 @@ class _CustomerBalancesSection extends ConsumerWidget {
   const _CustomerBalancesSection({
     required this.businessId,
     required this.currencySymbol,
+    required this.terminology,
   });
   final String businessId;
   final String currencySymbol;
+  final BusinessTerminology terminology;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final customers = ref.watch(customerBalancesProvider(businessId));
     return _Section(
-      title: 'Customer Balances',
-      action: 'View customers',
+      title: '${terminology.customer} Balances',
+      action: 'View ${terminology.customers.toLowerCase()}',
       onAction: () => context.go(AppRoutes.customers),
       child: customers.when(
         loading: () => const _SectionLoading(),

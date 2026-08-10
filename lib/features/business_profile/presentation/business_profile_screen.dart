@@ -9,6 +9,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../auth/application/user_profile_provider.dart';
+import '../../business_setup/domain/business_operating_model.dart';
+import '../../team/application/team_providers.dart';
 import '../services/pinata_upload_service.dart';
 
 class BusinessProfileScreen extends ConsumerStatefulWidget {
@@ -36,6 +38,7 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
   String? _logoUrl;
   String? _logoCid;
   CompressedImage? _pendingImage;
+  var _operatingModel = BusinessOperatingModel.product;
 
   @override
   void dispose() {
@@ -52,6 +55,11 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
   Widget build(BuildContext context) {
     final profile = ref.watch(currentUserProfileProvider).asData?.value;
     final businessId = profile?.activeBusinessId;
+    final isOwner = ref.watch(
+      currentBusinessMembershipProvider.select(
+        (value) => value.asData?.value?.isOwner == true,
+      ),
+    );
     if (businessId == null || businessId.isEmpty) {
       return const Scaffold(
         body: Center(child: Text('No business has been set up yet.')),
@@ -85,6 +93,11 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
           _websiteController.text = data['website'] as String? ?? '';
           _logoUrl = data['logoUrl'] as String?;
           _logoCid = data['logoCid'] as String?;
+          _operatingModel = BusinessOperatingModel.fromStorage(
+            data['operatingModel'],
+            businessType: data['businessType'] as String?,
+            customBusinessType: data['customBusinessType'] as String?,
+          );
         }
         return Scaffold(
           appBar: AppBar(
@@ -152,6 +165,43 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
                       'Website',
                       type: TextInputType.url,
                     ),
+                    DropdownButtonFormField<BusinessOperatingModel>(
+                      initialValue: _operatingModel,
+                      decoration: const InputDecoration(
+                        labelText: 'Business system',
+                        helperText:
+                            'Controls whether the app uses products, services, or both.',
+                      ),
+                      items: BusinessOperatingModel.values
+                          .map(
+                            (model) => DropdownMenuItem(
+                              value: model,
+                              child: Text(model.displayName),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: _isEditing && isOwner
+                          ? (value) {
+                              if (value != null) {
+                                setState(() => _operatingModel = value);
+                              }
+                            }
+                          : null,
+                    ),
+                    if (!isOwner)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Only the business owner can change the business system.',
+                            style: TextStyle(
+                              color: AppColors.mutedText,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -269,9 +319,9 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
         _logoCid = result.cid;
         _pendingImage = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Business logo updated.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Business logo updated.')));
     } on PinataUploadException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -288,17 +338,17 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
   }
 
   Future<void> _removeLogo(String businessId) async {
-    await FirebaseFirestore.instance.collection('businesses').doc(businessId).set(
-      <String, Object?>{
-        'logoUrl': null,
-        'logoCid': null,
-        'logoFileName': null,
-        'logoMimeType': null,
-        'logoUpdatedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await FirebaseFirestore.instance
+        .collection('businesses')
+        .doc(businessId)
+        .set(<String, Object?>{
+          'logoUrl': null,
+          'logoCid': null,
+          'logoFileName': null,
+          'logoMimeType': null,
+          'logoUpdatedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
     if (!mounted) return;
     setState(() {
       _logoUrl = null;
@@ -330,6 +380,7 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
             'website': _websiteController.text.trim().isEmpty
                 ? null
                 : _websiteController.text.trim(),
+            'operatingModel': _operatingModel.storedValue,
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
       final user = FirebaseAuth.instance.currentUser;

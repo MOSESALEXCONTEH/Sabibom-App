@@ -3,6 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sabibom/app/theme.dart';
 import 'package:sabibom/app/widgets/modern_bottom_navigation.dart';
 import 'package:sabibom/features/products/domain/product.dart';
+import 'package:sabibom/features/products/presentation/products_screen.dart';
+import 'package:sabibom/features/products/presentation/widgets/product_list_tile.dart';
+import 'package:sabibom/features/business_setup/application/business_experience_providers.dart';
+import 'package:sabibom/features/business_setup/domain/business_operating_model.dart';
+import 'package:sabibom/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:sabibom/features/products/presentation/widgets/stock_status_badge.dart';
 
 void main() {
@@ -64,6 +69,80 @@ void main() {
     expect(find.text('Low stock'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('service business navigation uses service terminology', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SabiBomTheme.light,
+        home: Scaffold(
+          bottomNavigationBar: ModernBottomNavigation(
+            selectedIndex: 0,
+            terminology: BusinessTerminology.forModel(
+              BusinessOperatingModel.service,
+            ),
+            onDestinationSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    for (final label in <String>['Income', 'Services', 'Clients']) {
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(find.text('Products'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('service capabilities disable stock and purchase modules', () {
+    const capabilities = BusinessCapabilities(BusinessOperatingModel.service);
+    expect(capabilities.managesInventory, isFalse);
+    expect(capabilities.managesPurchases, isFalse);
+    expect(capabilities.offersServices, isTrue);
+  });
+
+  testWidgets('service catalog row hides inventory-only status', (
+    tester,
+  ) async {
+    const service = Product(
+      id: 'service-1',
+      businessId: 'business-1',
+      name: 'Haircut',
+      sellingPriceMinor: 5000,
+      costPriceMinor: 0,
+      quantity: 0,
+      lowStockThreshold: 0,
+      trackStock: false,
+      unit: 'Service',
+      status: ProductStatus.active,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SabiBomTheme.light,
+        home: Scaffold(
+          body: ProductListTile(
+            product: service,
+            currencySymbol: 'Le',
+            inventoryEnabled: false,
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Available'), findsOneWidget);
+    expect(find.text('Untracked'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  test(
+    'products screen remains constructible after adaptive catalog changes',
+    () {
+      expect(const ProductsScreen(), isA<ProductsScreen>());
+      expect(const DashboardScreen(), isA<DashboardScreen>());
+    },
+  );
 
   testWidgets('bottom navigation respects reduced motion', (tester) async {
     await tester.pumpWidget(

@@ -5,35 +5,38 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../features/business_setup/application/business_experience_providers.dart';
 
 class ModernBottomNavigation extends StatelessWidget {
   const ModernBottomNavigation({
     required this.selectedIndex,
     required this.onDestinationSelected,
+    this.terminology = const BusinessTerminology.product(),
     super.key,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
+  final BusinessTerminology terminology;
 
-  static final _items = <_NavItem>[
+  List<_NavItem> get _items => <_NavItem>[
     _NavItem(
       label: 'Home',
       icon: CupertinoIcons.house,
       selectedIcon: CupertinoIcons.house_fill,
     ),
     _NavItem(
-      label: 'Sales',
+      label: terminology.sales,
       icon: CupertinoIcons.doc_text,
       selectedIcon: CupertinoIcons.doc_text_fill,
     ),
     _NavItem(
-      label: 'Products',
+      label: terminology.products,
       icon: CupertinoIcons.cube_box,
       selectedIcon: CupertinoIcons.cube_box_fill,
     ),
     _NavItem(
-      label: 'Customers',
+      label: terminology.customers,
       icon: CupertinoIcons.person_2,
       selectedIcon: CupertinoIcons.person_2_fill,
     ),

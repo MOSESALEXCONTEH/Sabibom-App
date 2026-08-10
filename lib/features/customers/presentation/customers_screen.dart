@@ -16,6 +16,7 @@ import '../../../core/widgets/app_summary_strip.dart';
 import '../../../core/widgets/app_tab_page_scaffold.dart';
 import '../../../core/widgets/list_bulk_actions.dart';
 import '../../dashboard/application/dashboard_providers.dart';
+import '../../business_setup/application/business_experience_providers.dart';
 import '../../sales/domain/sale_models.dart';
 import '../application/customers_providers.dart';
 import '../domain/customer.dart';
@@ -42,15 +43,20 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   @override
   Widget build(BuildContext context) {
     final active = ref.watch(activeBusinessProvider);
+    final terminology = ref.watch(currentBusinessTerminologyProvider);
     final hasBusiness = active.asData?.value is ActiveBusinessData;
     final businessId = switch (active.asData?.value) {
       ActiveBusinessData(:final business) => business.businessId,
       _ => null,
     };
     return AppTabPageScaffold(
-      title: _selectionMode ? '${_selected.length} selected' : 'Customers',
+      title: _selectionMode
+          ? '${_selected.length} selected'
+          : terminology.customers,
       subtitle: _selectionMode
-          ? 'Swipe left or select customers to archive'
+          ? 'Swipe left or select ${terminology.customers.toLowerCase()} to archive'
+          : terminology.customers == 'Clients'
+          ? 'Balances, transactions and contact details'
           : 'Balances, purchases and contact details',
       trailing: hasBusiness
           ? Row(
@@ -78,7 +84,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               heroTag: 'fab-new-customer',
               onPressed: () => context.pushNamed(AppRouteNames.newCustomer),
               icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: const Text('Add Customer'),
+              label: Text('Add ${terminology.customer}'),
             )
           : null,
       body: active.when(

@@ -8,6 +8,7 @@ import '../data/business_repository.dart';
 import '../data/firestore_business_repository.dart';
 import 'business_setup_providers.dart';
 import '../domain/business_setup_data.dart';
+import '../domain/business_operating_model.dart';
 import '../domain/receipt_settings.dart';
 import 'business_setup_state.dart';
 
@@ -76,14 +77,26 @@ class BusinessSetupController extends Notifier<BusinessSetupState> {
   void setBusinessDetails({
     String? businessName,
     String? businessType,
+    BusinessOperatingModel? operatingModel,
     String? customBusinessType,
     String? ownerName,
     String? logoPath,
     bool clearLogoPath = false,
   }) {
+    final shouldInfer =
+        businessType != null ||
+        (customBusinessType != null && state.data.businessType == 'Other');
+    final inferredModel = shouldInfer
+        ? BusinessOperatingModel.inferFromBusinessType(
+            businessType ?? state.data.businessType,
+            customBusinessType:
+                customBusinessType ?? state.data.customBusinessType,
+          )
+        : operatingModel;
     var updated = state.data.copyWith(
       businessName: businessName,
       businessType: businessType,
+      operatingModel: inferredModel,
       customBusinessType: customBusinessType,
       ownerName: ownerName,
       logoPath: logoPath,

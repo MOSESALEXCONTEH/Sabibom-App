@@ -1,4 +1,5 @@
 import 'receipt_settings.dart';
+import 'business_operating_model.dart';
 
 class CurrencyConfig {
   const CurrencyConfig({
@@ -30,6 +31,7 @@ class BusinessSetupData {
   const BusinessSetupData({
     required this.businessName,
     required this.businessType,
+    this.operatingModel = BusinessOperatingModel.product,
     required this.customBusinessType,
     required this.ownerName,
     required this.logoPath,
@@ -50,6 +52,7 @@ class BusinessSetupData {
     return BusinessSetupData(
       businessName: '',
       businessType: '',
+      operatingModel: BusinessOperatingModel.product,
       customBusinessType: '',
       ownerName: '',
       logoPath: null,
@@ -81,6 +84,11 @@ class BusinessSetupData {
     'Mobile Money',
     'Wholesale',
     'Services',
+    'Professional Services',
+    'Office Services',
+    'Laundry & Cleaning',
+    'Repair Services',
+    'Hotel',
     'Other',
   ];
 
@@ -121,6 +129,7 @@ class BusinessSetupData {
 
   final String businessName;
   final String businessType;
+  final BusinessOperatingModel operatingModel;
   final String customBusinessType;
   final String ownerName;
   final String? logoPath;
@@ -145,6 +154,7 @@ class BusinessSetupData {
   BusinessSetupData copyWith({
     String? businessName,
     String? businessType,
+    BusinessOperatingModel? operatingModel,
     String? customBusinessType,
     String? ownerName,
     String? logoPath,
@@ -164,6 +174,7 @@ class BusinessSetupData {
     return BusinessSetupData(
       businessName: businessName ?? this.businessName,
       businessType: businessType ?? this.businessType,
+      operatingModel: operatingModel ?? this.operatingModel,
       customBusinessType: customBusinessType ?? this.customBusinessType,
       ownerName: ownerName ?? this.ownerName,
       logoPath: clearLogoPath ? null : (logoPath ?? this.logoPath),
@@ -186,6 +197,7 @@ class BusinessSetupData {
     return <String, Object?>{
       'businessName': businessName,
       'businessType': businessType,
+      'operatingModel': operatingModel.storedValue,
       'customBusinessType': customBusinessType,
       'hasLogo': logoPath?.isNotEmpty == true,
       'district': district,
