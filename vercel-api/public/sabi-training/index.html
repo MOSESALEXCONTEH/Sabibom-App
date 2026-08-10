@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Sabi Training Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <main id="authView" class="auth-shell">
+      <section class="auth-panel">
+        <div class="brand-mark"><i data-lucide="sparkles"></i></div>
+        <p class="eyebrow">SabiBom Operations</p>
+        <h1>Sabi Training Console</h1>
+        <p class="muted">Review misunderstood requests and publish better business-language examples.</p>
+        <form id="loginForm">
+          <label>Email<input id="email" type="email" autocomplete="email" required /></label>
+          <label>Password<input id="password" type="password" autocomplete="current-password" required /></label>
+          <button class="primary full" type="submit"><i data-lucide="log-in"></i> Sign in</button>
+        </form>
+        <div class="divider"><span>or</span></div>
+        <button id="googleLogin" class="secondary full" type="button"><i data-lucide="chrome"></i> Continue with Google</button>
+        <p id="authError" class="error-text"></p>
+      </section>
+    </main>
+
+    <div id="appView" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="sidebar-brand"><span class="brand-mark small"><i data-lucide="sparkles"></i></span><strong>Sabi Training</strong></div>
+        <nav>
+          <button class="nav-item active" data-view="inbox"><i data-lucide="inbox"></i> Inbox <span id="inboxBadge" class="badge">0</span></button>
+          <button class="nav-item" data-view="examples"><i data-lucide="library"></i> Examples</button>
+          <button class="nav-item" data-view="test"><i data-lucide="flask-conical"></i> Test</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="userEmail"></span>
+          <button id="logout" class="icon-button" title="Sign out"><i data-lucide="log-out"></i></button>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Owner workspace</p>
+            <h2 id="viewTitle">Training inbox</h2>
+          </div>
+          <div class="business-control">
+            <label for="businessId">Business</label>
+            <select id="businessId"><option value="">Select a business</option></select>
+            <button id="loadBusiness" class="primary" type="button"><i data-lucide="refresh-cw"></i> Load</button>
+          </div>
+        </header>
+
+        <div id="emptyBusiness" class="empty-state">
+          <i data-lucide="building-2"></i>
+          <h3>Connect a business</h3>
+          <p>Select a business above. Only its owner can manage Sabi training.</p>
+        </div>
+
+        <section id="inboxView" class="view hidden">
+          <div class="summary-grid">
+            <div class="metric"><span>Unreviewed</span><strong id="unreviewedCount">0</strong></div>
+            <div class="metric"><span>Published</span><strong id="publishedCount">0</strong></div>
+            <div class="metric"><span>Drafts</span><strong id="draftCount">0</strong></div>
+          </div>
+          <div class="section-heading"><div><h3>Needs review</h3><p>Requests Sabi could not confidently resolve.</p></div></div>
+          <div id="inboxList" class="list"></div>
+        </section>
+
+        <section id="examplesView" class="view hidden">
+          <div class="section-heading">
+            <div><h3>Training examples</h3><p>Published examples affect Sabi immediately.</p></div>
+            <button id="newExample" class="primary"><i data-lucide="plus"></i> New example</button>
+          </div>
+          <div class="filters">
+            <button class="filter active" data-status="all">All</button>
+            <button class="filter" data-status="published">Published</button>
+            <button class="filter" data-status="draft">Drafts</button>
+            <button class="filter" data-status="archived">Archived</button>
+          </div>
+          <div id="examplesList" class="list"></div>
+        </section>
+
+        <section id="testView" class="view hidden">
+          <div class="test-layout">
+            <div>
+              <p class="eyebrow">Intent preview</p>
+              <h3>Test user wording</h3>
+              <p class="muted">Check which published example or built-in intent Sabi will use.</p>
+              <textarea id="testMessage" rows="5" placeholder="Example: add cutomer"></textarea>
+              <button id="runTest" class="primary"><i data-lucide="play"></i> Run test</button>
+            </div>
+            <div id="testResult" class="result-panel">
+              <i data-lucide="scan-search"></i>
+              <p>Test results will appear here.</p>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <dialog id="editor">
+      <form id="editorForm" method="dialog">
+        <div class="dialog-header"><div><p class="eyebrow">Training example</p><h3 id="editorTitle">New example</h3></div><button id="closeEditor" class="icon-button" type="button" title="Close"><i data-lucide="x"></i></button></div>
+        <input id="exampleId" type="hidden" />
+        <input id="sourceUnansweredId" type="hidden" />
+        <label>User wording<textarea id="utterance" rows="3" required placeholder="add cutomer"></textarea></label>
+        <label>Intended action<select id="intent" required></select></label>
+        <label>Clarification question<textarea id="clarification" rows="2" placeholder="What is the customer's name?"></textarea></label>
+        <label>Correct example prompt<textarea id="suggestedPrompt" rows="2" required placeholder="Add customer James, phone 07892537"></textarea></label>
+        <label>Internal notes<textarea id="notes" rows="2"></textarea></label>
+        <div class="dialog-actions">
+          <button id="saveDraft" class="secondary" type="button"><i data-lucide="save"></i> Save draft</button>
+          <button id="publish" class="primary" type="button"><i data-lucide="send"></i> Publish</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

@@ -73,6 +73,7 @@ class ReceiptTemplate {
     required this.shadingImageUrl,
     required this.signatureScale,
     required this.paidStampMode,
+    required this.paidStampImageBase64,
     required this.paidStampText,
     required this.unpaidStampText,
     required this.showQrCode,
@@ -136,6 +137,7 @@ class ReceiptTemplate {
       shadingImageUrl: null,
       signatureScale: 1,
       paidStampMode: ReceiptPaidStampMode.unpaidOnly,
+      paidStampImageBase64: null,
       paidStampText: 'The invoice has been paid.',
       unpaidStampText: 'The invoice has not been paid.',
       showQrCode: type == ReceiptTemplateType.modern,
@@ -369,6 +371,7 @@ class ReceiptTemplate {
         data['paidStampMode'],
         ReceiptPaidStampMode.unpaidOnly,
       ),
+      paidStampImageBase64: (data['paidStampImageBase64'] as String?)?.trim(),
       paidStampText:
           data['paidStampText'] as String? ?? 'The invoice has been paid.',
       unpaidStampText:
@@ -428,6 +431,7 @@ class ReceiptTemplate {
   final String? shadingImageUrl;
   final double signatureScale;
   final ReceiptPaidStampMode paidStampMode;
+  final String? paidStampImageBase64;
   final String paidStampText;
   final String unpaidStampText;
   final bool showQrCode;
@@ -481,6 +485,8 @@ class ReceiptTemplate {
     double? signatureScale,
     bool clearSignatureImage = false,
     ReceiptPaidStampMode? paidStampMode,
+    String? paidStampImageBase64,
+    bool clearPaidStampImage = false,
     String? paidStampText,
     String? unpaidStampText,
     bool? showQrCode,
@@ -533,6 +539,9 @@ class ReceiptTemplate {
       : (shadingImageUrl ?? this.shadingImageUrl),
     signatureScale: signatureScale ?? this.signatureScale,
     paidStampMode: paidStampMode ?? this.paidStampMode,
+    paidStampImageBase64: clearPaidStampImage
+      ? null
+      : (paidStampImageBase64 ?? this.paidStampImageBase64),
     paidStampText: paidStampText ?? this.paidStampText,
     unpaidStampText: unpaidStampText ?? this.unpaidStampText,
     showQrCode: showQrCode ?? this.showQrCode,
@@ -585,6 +594,7 @@ class ReceiptTemplate {
     'shadingImageUrl': shadingImageUrl,
     'signatureScale': signatureScale,
     'paidStampMode': paidStampMode.name,
+    'paidStampImageBase64': paidStampImageBase64,
     'paidStampText': paidStampText,
     'unpaidStampText': unpaidStampText,
     'showQrCode': showQrCode,
@@ -637,6 +647,7 @@ class ReceiptTemplate {
         'shadingImageUrl': shadingImageUrl,
         'signatureScale': signatureScale,
         'paidStampMode': paidStampMode.name,
+        'paidStampImageBase64': paidStampImageBase64,
         'paidStampText': paidStampText,
         'unpaidStampText': unpaidStampText,
         'showQrCode': showQrCode,

@@ -68,11 +68,13 @@ export const APP_PERMISSIONS = [
   "manage_roles",
   "view_staff_activity",
   "approve_sensitive_actions",
-  "view_branches",
+  "view_branch",
   "manage_branches",
-  "switch_branches",
-  "view_all_branch_reports",
-  "manage_branch_staff",
+  "switch_branch",
+  "view_all_branches",
+  "view_combined_reports",
+  "assign_staff_to_branches",
+  "manage_branch_operations",
   "view_notifications",
   "manage_notification_preferences",
   "view_low_stock_alerts",
@@ -158,10 +160,9 @@ const ROLE_DEFAULTS: Record<string, AppPermissionCode[]> = {
     "manage_roles",
     "view_staff_activity",
     "approve_sensitive_actions",
-    "view_branches",
-    "manage_branches",
-    "switch_branches",
-    "manage_branch_staff",
+    "view_branch",
+    "switch_branch",
+    "manage_branch_operations",
     "view_notifications",
     "manage_notification_preferences",
     "view_low_stock_alerts",
@@ -192,14 +193,18 @@ const ROLE_DEFAULTS: Record<string, AppPermissionCode[]> = {
     "use_sabi",
     "use_sabi_sales",
     "ask_sabi_business_questions",
-    "view_branches",
-    "switch_branches",
+    "view_branch",
+    "manage_branch_operations",
     "view_notifications",
     "view_low_stock_alerts",
     "view_approval_notifications",
     "view_end_of_day_alerts",
     "view_daily_summary",
     "receive_push_notifications",
+  ],
+  staff: [
+    "view_branch",
+    "manage_branch_operations",
   ],
   stock_keeper: [
     "view_products",
@@ -228,8 +233,8 @@ const ROLE_DEFAULTS: Record<string, AppPermissionCode[]> = {
     "use_sabi",
     "use_sabi_purchases",
     "ask_sabi_business_questions",
-    "view_branches",
-    "switch_branches",
+    "view_branch",
+    "manage_branch_operations",
     "view_notifications",
     "view_low_stock_alerts",
     "receive_push_notifications",
@@ -269,8 +274,8 @@ const ROLE_DEFAULTS: Record<string, AppPermissionCode[]> = {
     "use_sabi_expenses",
     "ask_sabi_business_questions",
     "ask_sabi_profit_questions",
-    "view_branches",
-    "switch_branches",
+    "view_branch",
+    "manage_branch_operations",
     "view_notifications",
     "view_customer_debt_alerts",
     "view_supplier_payment_alerts",
@@ -288,6 +293,14 @@ export type ResolvedMembership = {
   status: string;
   permissions: Set<AppPermissionCode>;
 };
+ROLE_DEFAULTS.admin = [...ROLE_DEFAULTS.manager];
+
+const LEGACY_PERMISSION_ALIASES: Record<string, AppPermissionCode> = {
+  view_branches: "view_branch",
+  switch_branches: "switch_branch",
+  view_all_branch_reports: "view_combined_reports",
+  manage_branch_staff: "assign_staff_to_branches",
+};
 
 export function resolvePermissions(input: {
   isOwner: boolean;
@@ -300,11 +313,16 @@ export function resolvePermissions(input: {
   }
   const roleKey = (input.roleId || input.role || "cashier").toLowerCase();
   const fromDoc = Array.isArray(input.permissions)
-    ? (input.permissions.filter(
-        (p): p is AppPermissionCode =>
-          typeof p === "string" &&
-          (APP_PERMISSIONS as readonly string[]).includes(p),
-      ) as AppPermissionCode[])
+    ? input.permissions
+        .filter((permission): permission is string => typeof permission === "string")
+        .map(
+          (permission) =>
+            LEGACY_PERMISSION_ALIASES[permission] ?? permission,
+        )
+        .filter(
+          (permission): permission is AppPermissionCode =>
+            (APP_PERMISSIONS as readonly string[]).includes(permission),
+        )
     : [];
   if (fromDoc.length > 0) return new Set(fromDoc);
   return new Set(ROLE_DEFAULTS[roleKey] ?? ROLE_DEFAULTS.cashier);

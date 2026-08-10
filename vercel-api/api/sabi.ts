@@ -1,5 +1,6 @@
 import type {VercelRequest, VercelResponse} from "@vercel/node";
 import businessQuestion from "../src/http/sabi/business-question";
+import agent from "../src/http/sabi/agent";
 import composeMessage from "../src/http/sabi/compose-message";
 import parseAction from "../src/http/sabi/parse-action";
 import parseReceipt from "../src/http/sabi/parse-receipt";
@@ -16,6 +17,7 @@ function actionKey(req: VercelRequest): string {
 }
 
 const routes: Record<string, Handler> = {
+  agent,
   "business-question": businessQuestion,
   "compose-message": composeMessage,
   "parse-action": parseAction,

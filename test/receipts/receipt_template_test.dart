@@ -27,13 +27,14 @@ void main() {
     final template = ReceiptTemplate.builtIn(
       type: ReceiptTemplateType.modern,
       businessId: 'biz-1',
-    );
+    ).copyWith(paidStampImageBase64: 'stamp-bytes');
     final snapshot = template.toSnapshot(
       logoUrl: 'https://gateway.example/ipfs/cid123',
       logoCid: 'cid123',
     );
     expect(snapshot['logoCid'], 'cid123');
     expect(snapshot['logoUrl'], contains('cid123'));
+    expect(snapshot['paidStampImageBase64'], 'stamp-bytes');
     expect(snapshot.containsKey('logoBytes'), isFalse);
   });
 
@@ -58,6 +59,7 @@ void main() {
       'businessNameFontSize': '24',
       'accentAlpha': '0.8',
       'paidStampMode': 'always',
+      'paidStampImageBase64': 'stamp-image',
       'signatureMode': 'upload',
       'showQrCode': 'true',
       'qrCodeType': 'receiptNumber',
@@ -70,6 +72,7 @@ void main() {
     expect(template.businessNameFontSize, 24);
     expect(template.accentAlpha, 0.8);
     expect(template.paidStampMode, ReceiptPaidStampMode.always);
+    expect(template.paidStampImageBase64, 'stamp-image');
     expect(template.signatureMode, ReceiptSignatureMode.upload);
     expect(template.showQrCode, isTrue);
     expect(template.qrCodeType, ReceiptQrCodeType.receiptNumber);

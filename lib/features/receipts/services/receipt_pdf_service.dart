@@ -351,7 +351,8 @@ class ReceiptPdfService {
           pw.SizedBox(height: 6),
           _totalsColumn(ctx),
           _paymentAndNotes(ctx),
-          if (ctx.layout.showSignature) _signatureRow(ctx),
+          if (ctx.layout.showSignature || _showPaidStampImage(ctx))
+            _signatureRow(ctx),
           _footerBlock(ctx, centered: true),
         ],
       ),
@@ -489,7 +490,8 @@ class ReceiptPdfService {
           ),
         ),
         _paymentAndNotes(ctx),
-        if (ctx.layout.showSignature) _signatureRow(ctx),
+        if (ctx.layout.showSignature || _showPaidStampImage(ctx))
+          _signatureRow(ctx),
         _footerBlock(ctx, centered: true),
       ],
     );
@@ -565,7 +567,8 @@ class ReceiptPdfService {
           ),
         ),
         _paymentAndNotes(ctx),
-        if (ctx.layout.showSignature) _signatureRow(ctx),
+        if (ctx.layout.showSignature || _showPaidStampImage(ctx))
+          _signatureRow(ctx),
         _footerBlock(ctx, centered: true),
       ],
     );
@@ -635,7 +638,8 @@ class ReceiptPdfService {
                 ),
               ),
               _paymentAndNotes(ctx),
-              if (ctx.layout.showSignature) _signatureRow(ctx),
+              if (ctx.layout.showSignature || _showPaidStampImage(ctx))
+                _signatureRow(ctx),
               _footerBlock(ctx, centered: false),
             ],
           ),
@@ -727,7 +731,8 @@ class ReceiptPdfService {
             pw.SizedBox(height: 8),
             _totalsColumn(ctx),
             _paymentAndNotes(ctx),
-            if (ctx.layout.showSignature) _signatureRow(ctx),
+            if (ctx.layout.showSignature || _showPaidStampImage(ctx))
+              _signatureRow(ctx),
             _footerBlock(ctx, centered: true, italic: true),
           ],
         ),
@@ -856,7 +861,8 @@ class ReceiptPdfService {
           ),
         ),
         _paymentAndNotes(ctx),
-        if (ctx.layout.showSignature) _signatureRow(ctx),
+        if (ctx.layout.showSignature || _showPaidStampImage(ctx))
+          _signatureRow(ctx),
         _footerBlock(ctx, centered: true),
       ],
     );
@@ -1799,6 +1805,25 @@ class ReceiptPdfService {
   }
 
   pw.Widget _signatureRow(_ReceiptRenderContext ctx) {
+    if (_showPaidStampImage(ctx)) {
+      try {
+        final bytes = base64Decode(ctx.layout.paidStampImageBase64!.trim());
+        return pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 18),
+          child: pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.SizedBox(
+              width: 170,
+              height: 52,
+              child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
+            ),
+          ),
+        );
+      } catch (_) {
+        // Fall back to text stamp or signature lines when stored payload is invalid.
+      }
+    }
+
     final signatureScale = ctx.layout.signatureScale.clamp(0.7, 1.8);
     if (ctx.layout.signatureMode != ReceiptSignatureMode.placeholder &&
         (ctx.layout.signatureImageBase64?.trim().isNotEmpty ?? false)) {
@@ -1840,6 +1865,19 @@ class ReceiptPdfService {
     );
   }
 
+  bool _showPaidStampImage(_ReceiptRenderContext ctx) {
+    final shouldShow = switch (ctx.layout.paidStampMode) {
+      ReceiptPaidStampMode.hidden => false,
+      ReceiptPaidStampMode.paidOnly =>
+        ctx.sale.paymentStatus == PaymentStatus.paid,
+      ReceiptPaidStampMode.unpaidOnly =>
+        ctx.sale.paymentStatus != PaymentStatus.paid,
+      ReceiptPaidStampMode.always => true,
+    };
+    return shouldShow &&
+        (ctx.layout.paidStampImageBase64?.trim().isNotEmpty ?? false);
+  }
+
   pw.Widget _paidStamp(_ReceiptRenderContext ctx) {
     final show = switch (ctx.layout.paidStampMode) {
       ReceiptPaidStampMode.hidden => false,
@@ -1850,6 +1888,7 @@ class ReceiptPdfService {
       ReceiptPaidStampMode.always => true,
     };
     if (!show) return pw.SizedBox();
+    if (_showPaidStampImage(ctx)) return pw.SizedBox();
     final text = ctx.sale.paymentStatus == PaymentStatus.paid
         ? ctx.layout.paidStampText
         : ctx.layout.unpaidStampText;

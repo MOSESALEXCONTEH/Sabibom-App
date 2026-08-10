@@ -24,6 +24,10 @@
       "destination": "/api/sabi?action=:action"
     },
     {
+      "source": "/api/sabi-training/:action",
+      "destination": "/api/sabi-training?action=:action"
+    },
+    {
       "source": "/api/cron/:job",
       "destination": "/api/cron?job=:job"
     },

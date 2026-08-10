@@ -1383,6 +1383,11 @@ class _ReceiptMockup extends StatelessWidget {
   }
 
   Widget _footer() {
+    bool hasPaidStampImage() =>
+        draft.paidStampMode != ReceiptPaidStampMode.hidden &&
+        draft.paidStampImageBase64 != null &&
+        draft.paidStampImageBase64!.isNotEmpty;
+
     String? statusText() {
       return switch (draft.paidStampMode) {
         ReceiptPaidStampMode.hidden => null,
@@ -1406,7 +1411,19 @@ class _ReceiptMockup extends StatelessWidget {
                 : FontStyle.normal,
           ),
         ),
-        if (draft.showSignature) ...<Widget>[
+        if (hasPaidStampImage()) ...<Widget>[
+          const SizedBox(height: 10),
+          Container(
+            width: 220,
+            height: 82,
+            alignment: Alignment.center,
+            child: Image.memory(
+              base64Decode(draft.paidStampImageBase64!),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ]
+        else if (draft.showSignature) ...<Widget>[
           const SizedBox(height: 10),
           if (draft.signatureMode != ReceiptSignatureMode.placeholder &&
               draft.signatureImageBase64 != null &&
@@ -1435,7 +1452,9 @@ class _ReceiptMockup extends StatelessWidget {
               ),
             ),
         ],
-        if (paidText != null && paidText.trim().isNotEmpty) ...<Widget>[
+        if (!hasPaidStampImage() &&
+            paidText != null &&
+            paidText.trim().isNotEmpty) ...<Widget>[
           const SizedBox(height: 10),
           Text(
             paidText,
@@ -2470,6 +2489,26 @@ class _ControlsBodyState extends State<_ControlsBody> {
   }
 
   List<Widget> _paidStampSection(ReceiptTemplate draft) {
+    Future<void> pickPaidStamp() async {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        imageQuality: 90,
+      );
+      if (picked == null) return;
+      final bytes = await File(picked.path).readAsBytes();
+      final base64 = base64Encode(bytes);
+      if (!mounted) return;
+      widget.onChanged(
+        draft.copyWith(
+          paidStampImageBase64: base64,
+          paidStampMode: draft.paidStampMode == ReceiptPaidStampMode.hidden
+              ? ReceiptPaidStampMode.paidOnly
+              : draft.paidStampMode,
+        ),
+      );
+    }
+
     return <Widget>[
       DropdownButtonFormField<ReceiptPaidStampMode>(
         key: ValueKey(
@@ -2487,6 +2526,63 @@ class _ControlsBodyState extends State<_ControlsBody> {
             widget.onChanged(draft.copyWith(paidStampMode: value));
           }
         },
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: <Widget>[
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: pickPaidStamp,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: Text(
+                draft.paidStampImageBase64 != null &&
+                        draft.paidStampImageBase64!.isNotEmpty
+                    ? 'Replace paid stamp image'
+                    : 'Upload paid stamp image',
+              ),
+            ),
+          ),
+        ],
+      ),
+      if (draft.paidStampImageBase64 != null &&
+          draft.paidStampImageBase64!.isNotEmpty) ...<Widget>[
+        const SizedBox(height: 10),
+        Container(
+          height: 88,
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+          ),
+          alignment: Alignment.center,
+          child: Image.memory(
+            base64Decode(draft.paidStampImageBase64!),
+            fit: BoxFit.contain,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => widget.onChanged(
+              draft.copyWith(clearPaidStampImage: true),
+            ),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Remove paid stamp image'),
+          ),
+        ),
+      ],
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFD1D5DB)),
+          borderRadius: BorderRadius.circular(12),
+          color: const Color(0xFFF8FAFC),
+        ),
+        child: const Text(
+          'Uploaded paid stamp images render in the same receipt position used for signatures. If no image is uploaded, the text below is used instead.',
+        ),
       ),
       const SizedBox(height: 8),
       TextFormField(

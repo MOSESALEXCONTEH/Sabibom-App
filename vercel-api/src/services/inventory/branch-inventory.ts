@@ -4,6 +4,7 @@ import type {
   Firestore,
   Transaction,
 } from "firebase-admin/firestore";
+import { resolveBranchAuthorization } from "../team/branch-access.js";
 import {errors} from "../../utils/api-errors";
 
 export interface ActiveBranchContext {
@@ -51,22 +52,14 @@ export async function requireActiveBranchAccess(input: {
   }
 
   const businessData = businessSnapshot.data() ?? {};
-  const isOwner = businessData.ownerId === input.uid;
   const memberData = memberSnapshot.data() ?? {};
-  const isActiveMember = memberSnapshot.exists && memberData.status === "active";
-  const assignedBranchIds = Array.isArray(memberData.assignedBranchIds)
-    ? memberData.assignedBranchIds.filter(
-        (value): value is string => typeof value === "string",
-      )
-    : [];
-  const hasAccess =
-    isOwner ||
-    (isActiveMember &&
-      (memberData.allBranchesAccess === true ||
-        assignedBranchIds.includes(branchId) ||
-        memberData.defaultBranchId === branchId ||
-        (assignedBranchIds.length === 0 && branchId === "main")));
-  if (!hasAccess) {
+  const access = resolveBranchAuthorization({
+    uid: input.uid,
+    ownerId: businessData.ownerId,
+    memberExists: memberSnapshot.exists,
+    memberData,
+  });
+  if (!access.canAccessBranch(branchId)) {
     throw errors.invalidArgument("You do not have access to this branch.");
   }
 

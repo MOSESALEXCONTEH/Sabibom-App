@@ -1,0 +1,650 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isCurrentUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isBusinessOwner(businessId) {
+      return signedIn()
+        && get(
+          /databases/$(database)/documents/businesses/$(businessId)
+        ).data.ownerId == request.auth.uid;
+    }
+
+    function isActiveBusinessMember(businessId) {
+      return signedIn()
+        && exists(
+          /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+        ).data.status == 'active';
+    }
+
+    function canCompleteSales(businessId) {
+      return isBusinessOwner(businessId)
+        || (
+          isActiveBusinessMember(businessId)
+          && get(
+            /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+          ).data.role in ['manager', 'cashier']
+        );
+    }
+
+    function memberData(businessId) {
+      return get(
+        /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+      ).data;
+    }
+
+    function hasBusinessPermission(businessId, permission) {
+      return isBusinessOwner(businessId)
+        || (
+          isActiveBusinessMember(businessId)
+          && (
+            memberData(businessId).role == 'owner'
+            || memberData(businessId).isOwner == true
+            || memberData(businessId).role == 'manager'
+            || permission in memberData(businessId).get('permissions', [])
+          )
+        );
+    }
+
+    function canManageStaff(businessId) {
+      return hasBusinessPermission(businessId, 'manage_staff');
+    }
+
+    function hasBranchAccess(businessId, branchId) {
+      let normalized = branchId == null || branchId == '' ? 'main' : branchId;
+      return isBusinessOwner(businessId)
+        || (
+          isActiveBusinessMember(businessId)
+          && (
+            memberData(businessId).get('allBranchesAccess', false) == true
+            || memberData(businessId).get('assignedBranchIds', []).hasAny([normalized])
+            || memberData(businessId).get('defaultBranchId', '') == normalized
+            || (
+              memberData(businessId).get('assignedBranchIds', []).size() == 0
+              && normalized == 'main'
+            )
+          )
+        );
+    }
+
+    function effectiveBranchId(data) {
+      return data.get('branchId', '') == '' ? 'main' : data.get('branchId', 'main');
+    }
+
+    function hasExplicitBranchId(data) {
+      return data.get('branchId', '') is string
+        && data.get('branchId', '') != '';
+    }
+
+    function canWriteBranchScopedData(businessId, data) {
+      return canCompleteSales(businessId)
+        && hasExplicitBranchId(data)
+        && hasBranchAccess(businessId, effectiveBranchId(data))
+        && branchIsActive(businessId, effectiveBranchId(data));
+    }
+
+    function branchDoc(businessId, branchId) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)/branches/$(branchId));
+    }
+
+    function branchExists(businessId, branchId) {
+      return exists(/databases/$(database)/documents/businesses/$(businessId)/branches/$(branchId));
+    }
+
+    function branchIsActive(businessId, branchId) {
+      return branchExists(businessId, branchId)
+        && branchDoc(businessId, branchId).data.status == 'active';
+    }
+
+    // Collection-group access for invitation lookup by code / id.
+    match /{path=**}/staff_invitations/{invitationId} {
+      allow read: if signedIn() && (
+        resource.data.status == 'pending'
+        || isBusinessOwner(resource.data.businessId)
+        || isActiveBusinessMember(resource.data.businessId)
+      );
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow create, read, update: if isCurrentUser(userId);
+      allow delete: if false;
+
+      match /notifications/{notificationId} {
+        allow read: if isCurrentUser(userId);
+        // Users manage their own notifications; trusted members may create
+        // business alerts for colleagues. Title/body identity fields are set
+        // on create only — clients should not forge other users' prefs.
+        allow create: if signedIn() && (
+          isCurrentUser(userId)
+          || (
+            request.resource.data.businessId is string
+            && request.resource.data.businessId.size() > 0
+            && isActiveBusinessMember(request.resource.data.businessId)
+          )
+        );
+        allow update: if isCurrentUser(userId);
+        allow delete: if isCurrentUser(userId);
+      }
+
+      match /notification_preferences/{prefsId} {
+        allow read, create, update: if isCurrentUser(userId);
+        allow delete: if isCurrentUser(userId);
+      }
+
+      match /feedback/{feedbackId} {
+        allow create: if isCurrentUser(userId)
+          && request.resource.data.userId == request.auth.uid;
+        allow read, update: if isCurrentUser(userId)
+          && resource.data.userId == request.auth.uid;
+        allow delete: if false;
+      }
+
+      match /devices/{deviceId} {
+        allow read, create, update, delete: if isCurrentUser(userId);
+      }
+    }
+
+    // Deduplication ledger — signed-in writers for client alert services;
+    // prefer Admin SDK for production generation.
+    match /notification_events/{eventKey} {
+      allow read: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    match /feedback/{feedbackId} {
+      // Top-level feedback inbox (support triage).
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['userId', 'title', 'description', 'category'])
+        && request.resource.data.userId is string
+        && request.resource.data.userId == request.auth.uid;
+      allow read, update: if signedIn()
+        && resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Platform Super Admin — server-only (Firebase Admin SDK).
+    // Browser clients must not read or write these collections.
+    match /platform_admins/{adminUid} {
+      allow read, write: if false;
+    }
+
+    match /platform_admin_activity/{activityId} {
+      allow read, write: if false;
+    }
+
+    match /platform_metrics_daily/{dateKey} {
+      allow read, write: if false;
+    }
+
+    match /platform_settings/{docId} {
+      // Only intentionally public fields may be readable by the mobile app.
+      // Clients must not write. Prefer Admin SDK for all platform settings.
+      allow read: if docId == 'public' && signedIn();
+      allow write: if false;
+    }
+
+    match /platform_feature_flags/{flagId} {
+      allow read, write: if false;
+    }
+
+    match /platform_announcements/{announcementId} {
+      allow read, write: if false;
+    }
+
+    match /platform_app_versions/{versionId} {
+      allow read, write: if false;
+    }
+
+    match /platform_ai_requests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /platform_security_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /platform_backup_jobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /platform_restore_jobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /platform_import_jobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /platform_deletion_requests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /platform_notifications/{notificationId} {
+      allow read, write: if false;
+    }
+
+    match /platform_beta_testers/{testerId} {
+      allow read, write: if false;
+    }
+
+    match /platform_scheduled_jobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /support_tickets/{ticketId} {
+      allow read, write: if false;
+    }
+
+    match /bug_reports/{bugId} {
+      allow read, write: if false;
+    }
+
+    match /subscription_plans/{planId} {
+      allow read, write: if false;
+    }
+
+    match /business_subscriptions/{businessId} {
+      allow read, write: if false;
+    }
+
+    match /billing_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    // Unanswered Sabi asks — training / improvement inbox.
+    match /sabi_unanswered/{askId} {
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.businessId is string
+        && request.resource.data.question is string
+        && (
+          isBusinessOwner(request.resource.data.businessId)
+          || isActiveBusinessMember(request.resource.data.businessId)
+        );
+      allow read: if signedIn()
+        && (
+          resource.data.userId == request.auth.uid
+          || isBusinessOwner(resource.data.businessId)
+          || isActiveBusinessMember(resource.data.businessId)
+        );
+      allow delete: if false;
+    }
+
+    // Businesses
+    match /businesses/{businessId} {
+
+      // A signed-in user can create a business only for themselves.
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.businessId == businessId;
+
+      // Owner or active member can read the business.
+      allow read: if isBusinessOwner(businessId)
+        || isActiveBusinessMember(businessId);
+
+      // Only the owner can currently update the business.
+      allow update: if isBusinessOwner(businessId)
+        && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if false;
+
+      // Business members
+      match /members/{memberId} {
+
+        // Supports creation of the first owner membership in the
+        // same batch that creates the business.
+        // Also allows invitees to accept (self-create non-owner).
+        allow create: if signedIn() && (
+          (
+            memberId == request.auth.uid
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.role == 'owner'
+            && request.resource.data.status == 'active'
+            && getAfter(
+              /databases/$(database)/documents/businesses/$(businessId)
+            ).data.ownerId == request.auth.uid
+          )
+          || isBusinessOwner(businessId)
+          || canManageStaff(businessId)
+          || (
+            memberId == request.auth.uid
+            && request.resource.data.status == 'active'
+            && request.resource.data.get('isOwner', false) != true
+            && request.resource.data.get('roleId', request.resource.data.get('role', '')) != 'owner'
+            && request.resource.data.get('role', '') != 'owner'
+            && request.resource.data.get('allBranchesAccess', false) == false
+            && request.resource.data.get('assignedBranchIds', []).size() == 0
+            && request.resource.data.get('defaultBranchId', '') == ''
+          )
+        );
+
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId)
+          || (signedIn() && memberId == request.auth.uid);
+
+        // Owners/managers may update other members.
+        // Members cannot escalate their own role/permissions.
+        allow update: if canManageStaff(businessId)
+          && (
+            memberId != request.auth.uid
+            || (
+              request.resource.data.roleId == resource.data.roleId
+              &&
+              request.resource.data.get('permissions', []) == resource.data.get('permissions', [])
+              && request.resource.data.get('permissionOverrides', []) == resource.data.get('permissionOverrides', [])
+              && request.resource.data.get('permissionDenials', []) == resource.data.get('permissionDenials', [])
+              && request.resource.data.get('assignedBranchIds', []) == resource.data.get('assignedBranchIds', [])
+              && request.resource.data.get('allBranchesAccess', false) == resource.data.get('allBranchesAccess', false)
+              && request.resource.data.get('defaultBranchId', '') == resource.data.get('defaultBranchId', '')
+            )
+          );
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /branches/{branchId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, branchId);
+
+        allow create: if hasBusinessPermission(businessId, 'manage_branches')
+          && request.resource.data.businessId == businessId
+          && request.resource.data.branchId == branchId
+          && request.resource.data.name is string
+          && request.resource.data.code is string
+          && request.resource.data.status in ['active', 'inactive', 'archived']
+          && (
+            request.resource.data.isMainBranch != true
+            || (
+              branchId == 'main'
+              && !branchExists(businessId, 'main')
+              && request.resource.data.status == 'active'
+            )
+          );
+
+        allow update: if hasBusinessPermission(businessId, 'manage_branches')
+          && resource.data.businessId == businessId
+          && request.resource.data.businessId == businessId
+          && request.resource.data.branchId == resource.data.branchId
+          && request.resource.data.status in ['active', 'inactive', 'archived']
+          && (
+            resource.data.isMainBranch != true
+            || (
+              request.resource.data.isMainBranch == true
+              && request.resource.data.status == 'active'
+            )
+          )
+          && (
+            request.resource.data.isMainBranch != true
+            || branchId == 'main'
+          );
+
+        allow delete: if false;
+      }
+
+      match /roles/{roleId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if canManageStaff(businessId)
+          || hasBusinessPermission(businessId, 'manage_roles');
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /staff_invitations/{invitationId} {
+        allow read: if canManageStaff(businessId)
+          || (
+            signedIn()
+            && resource.data.status == 'pending'
+          );
+        allow create: if canManageStaff(businessId);
+        allow update: if canManageStaff(businessId)
+          || (
+            signedIn()
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.acceptedBy == request.auth.uid
+          );
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /staff_activity/{activityId} {
+        allow read: if hasBusinessPermission(businessId, 'view_staff_activity')
+          || isBusinessOwner(businessId)
+          || (
+            isActiveBusinessMember(businessId)
+            && memberData(businessId).role in ['owner', 'manager']
+          );
+        allow create: if isActiveBusinessMember(businessId)
+          && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      match /approval_requests/{approvalId} {
+        allow read: if isActiveBusinessMember(businessId)
+          || isBusinessOwner(businessId);
+        allow create: if isActiveBusinessMember(businessId)
+          && request.resource.data.requestedBy == request.auth.uid;
+        allow update: if hasBusinessPermission(businessId, 'approve_sensitive_actions')
+          || (
+            isActiveBusinessMember(businessId)
+            && resource.data.requestedBy == request.auth.uid
+            && request.resource.data.status == 'cancelled'
+          );
+        allow delete: if false;
+      }
+
+      match /settings/{settingsId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'edit_business_settings');
+        allow delete: if false;
+      }
+
+      // A completed sale is a single Firestore transaction that creates its
+      // receipt and accounting records while updating stock and credit.
+      match /sales/{saleId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow update: if (isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'void_sale'))
+          && canWriteBranchScopedData(businessId, request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /products/{productId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /inventory_movements/{movementId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        // Inventory mutations are authored by trusted Vercel Admin SDK
+        // transactions. Clients may only create legacy-compatible movements
+        // while migration completes; updates remain owner-only.
+        allow create: if (canCompleteSales(businessId)
+          || hasBusinessPermission(businessId, 'adjust_stock'))
+          && hasExplicitBranchId(request.resource.data)
+          && hasBranchAccess(businessId, effectiveBranchId(request.resource.data))
+          && branchIsActive(businessId, effectiveBranchId(request.resource.data));
+        allow update, delete: if isBusinessOwner(businessId);
+      }
+
+      match /inventory_batches/{batchId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        // Clients cannot forge batch consumption, remaining quantities, or
+        // source fields. Mutations must go through Admin SDK endpoints.
+        allow create, update, delete: if false;
+      }
+
+      match /customers/{customerId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+
+        match /ledger/{entryId} {
+          allow read: if (isBusinessOwner(businessId)
+            || isActiveBusinessMember(businessId))
+            && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+          allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+          allow update, delete: if isBusinessOwner(businessId);
+        }
+      }
+
+      match /counters/{counterId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data);
+      }
+
+      match /activity/{activityId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+      }
+
+      match /analytics/{analyticsId} {
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data);
+      }
+
+      match /customer_ledger/{entryId} {
+        allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+      }
+
+      match /receipt_templates/{templateId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update, delete: if isBusinessOwner(businessId)
+          || (
+            isActiveBusinessMember(businessId)
+            && get(
+              /databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)
+            ).data.role in ['manager']
+          );
+      }
+
+      match /expense_categories/{categoryId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if canCompleteSales(businessId);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /suppliers/{supplierId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+
+        match /ledger/{entryId} {
+          allow read: if (isBusinessOwner(businessId)
+            || isActiveBusinessMember(businessId))
+            && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+          allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+          allow update, delete: if isBusinessOwner(businessId);
+        }
+      }
+
+      match /purchases/{purchaseId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create, update: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /purchase_returns/{returnId} {
+        allow read: if (isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId))
+          && hasBranchAccess(businessId, effectiveBranchId(resource.data));
+        allow create: if canWriteBranchScopedData(businessId, request.resource.data);
+        allow update, delete: if isBusinessOwner(businessId);
+      }
+
+      match /daily_summaries/{dateKey} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'view_daily_summary')
+          || hasBusinessPermission(businessId, 'view_sales_reports');
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /weekly_summaries/{weekKey} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'view_weekly_report')
+          || hasBusinessPermission(businessId, 'view_sales_reports');
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      match /end_of_day/{dateKey} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || hasBusinessPermission(businessId, 'view_end_of_day_alerts')
+          || hasBusinessPermission(businessId, 'view_sales_reports')
+          || hasBusinessPermission(businessId, 'complete_sales');
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      // Unanswered Sabi questions for later training / routing improvements.
+      match /sabi_unanswered/{askId} {
+        allow read: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow create, update: if isBusinessOwner(businessId)
+          || isActiveBusinessMember(businessId);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      // Sales, products, customers, expenses, activity and other
+      // business subcollections.
+      match /{document=**} {
+        allow read: if (isBusinessOwner(businessId)
+          || (isActiveBusinessMember(businessId)
+            && hasBranchAccess(businessId, effectiveBranchId(resource.data))));
+
+        allow create, update: if isBusinessOwner(businessId)
+          || (
+            canWriteBranchScopedData(businessId, request.resource.data)
+          );
+        allow delete: if isBusinessOwner(businessId);
+      }
+    }
+  }
+}

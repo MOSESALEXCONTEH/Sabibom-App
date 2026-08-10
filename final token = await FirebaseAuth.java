@@ -1,0 +1,1 @@
+final token = await FirebaseAuth.instance.currentUser?.getIdToken(forceRefresh);
