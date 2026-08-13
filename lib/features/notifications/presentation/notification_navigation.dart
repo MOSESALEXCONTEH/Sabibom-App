@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/router.dart';
 import '../../team/presentation/team_widgets.dart';
@@ -11,6 +12,11 @@ Future<void> openNotificationRoute(
   BuildContext context,
   AppNotification n,
 ) async {
+  final link = Uri.tryParse(n.linkUrl?.trim() ?? '');
+  if (link != null && link.scheme == 'https' && link.host.isNotEmpty) {
+    await launchUrl(link, mode: LaunchMode.externalApplication);
+    return;
+  }
   final routeName = n.routeName;
   if (n.sourceType == 'platform_announcement') {
     await showDialog<void>(

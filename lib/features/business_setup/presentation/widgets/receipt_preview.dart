@@ -33,7 +33,7 @@ class ReceiptPreview extends StatelessWidget {
                   : settings.phoneNumber.trim(),
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.mutedText),
+              ).textTheme.bodyMedium?.copyWith(color: context.mutedTextColor),
             ),
             Text(
               settings.address.trim().isEmpty
@@ -41,7 +41,7 @@ class ReceiptPreview extends StatelessWidget {
                   : settings.address.trim(),
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.mutedText),
+              ).textTheme.bodyMedium?.copyWith(color: context.mutedTextColor),
             ),
             const Divider(height: 24),
             const Text('Sample Item                     15.00'),
@@ -55,7 +55,7 @@ class ReceiptPreview extends StatelessWidget {
               settings.footerMessage,
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.mutedText),
+              ).textTheme.bodySmall?.copyWith(color: context.mutedTextColor),
             ),
           ],
         ),

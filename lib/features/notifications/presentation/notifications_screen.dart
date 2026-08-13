@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../app/router.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../team/application/team_providers.dart';
 import '../data/notifications_repository.dart';
@@ -449,6 +450,19 @@ class _NotificationCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(n.message),
+                    if (n.imageUrl?.trim().isNotEmpty == true) ...[
+                      const SizedBox(height: 10),
+                      AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: AppNetworkImage(
+                          url: n.imageUrl!.trim(),
+                          cid: n.imageCid,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     Text(
                       [

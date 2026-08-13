@@ -1411,46 +1411,61 @@ class _ReceiptMockup extends StatelessWidget {
                 : FontStyle.normal,
           ),
         ),
-        if (hasPaidStampImage()) ...<Widget>[
+        if (draft.showSignature || hasPaidStampImage()) ...<Widget>[
           const SizedBox(height: 10),
-          Container(
-            width: 220,
-            height: 82,
-            alignment: Alignment.center,
-            child: Image.memory(
-              base64Decode(draft.paidStampImageBase64!),
-              fit: BoxFit.contain,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              if (draft.showSignature)
+                Expanded(
+                  child: () {
+                    if (draft.signatureMode != ReceiptSignatureMode.placeholder &&
+                        draft.signatureImageBase64 != null &&
+                        draft.signatureImageBase64!.isNotEmpty) {
+                      return Container(
+                        width: 220 * draft.signatureScale.clamp(0.7, 1.8),
+                        height: 82 * draft.signatureScale.clamp(0.7, 1.8),
+                        alignment: Alignment.center,
+                        child: Image.memory(
+                          base64Decode(draft.signatureImageBase64!),
+                          fit: BoxFit.contain,
+                        ),
+                      );
+                    }
+                    return Container(
+                      width: 160,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: const Color(0xFFF59E0B),
+                          width: 1.8,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'Add signature here',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    );
+                  }(),
+                )
+              else
+                const SizedBox.shrink(),
+              if (hasPaidStampImage()) ...<Widget>[
+                const SizedBox(width: 16),
+                Container(
+                  width: 160,
+                  height: 70,
+                  alignment: Alignment.center,
+                  child: Image.memory(
+                    base64Decode(draft.paidStampImageBase64!),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ],
+            ],
           ),
-        ]
-        else if (draft.showSignature) ...<Widget>[
-          const SizedBox(height: 10),
-          if (draft.signatureMode != ReceiptSignatureMode.placeholder &&
-              draft.signatureImageBase64 != null &&
-              draft.signatureImageBase64!.isNotEmpty)
-            Container(
-              width: 220 * draft.signatureScale.clamp(0.7, 1.8),
-              height: 82 * draft.signatureScale.clamp(0.7, 1.8),
-              alignment: Alignment.center,
-              child: Image.memory(
-                base64Decode(draft.signatureImageBase64!),
-                fit: BoxFit.contain,
-              ),
-            )
-          else
-            Container(
-              width: 160,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFF59E0B), width: 1.8),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text(
-                'Add signature here',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
         ],
         if (!hasPaidStampImage() &&
             paidText != null &&

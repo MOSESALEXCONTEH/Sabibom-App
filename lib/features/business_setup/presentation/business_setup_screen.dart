@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../auth/application/user_profile_provider.dart';
 import '../../dashboard/application/dashboard_providers.dart';
@@ -60,7 +59,6 @@ class BusinessSetupScreen extends ConsumerWidget {
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
         appBar: AppBar(title: const Text('Business Setup')),
         body: SafeArea(
           child: state.isInitializing

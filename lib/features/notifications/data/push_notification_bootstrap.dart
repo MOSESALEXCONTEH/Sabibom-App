@@ -11,6 +11,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/network/authenticated_api_client.dart';
 import '../../../core/services/connectivity_service.dart';
@@ -256,6 +258,21 @@ class PushNotificationBootstrap {
     final body = notification?.body ?? message.data['body'] as String?;
     if (title == null || title.isEmpty || body == null || body.isEmpty) return;
     final channel = _channelFor(message.data['channel'] as String?);
+    final imageUrl = message.data['imageUrl'] as String?;
+    ByteArrayAndroidBitmap? largeImage;
+    if (imageUrl != null && imageUrl.startsWith('https://')) {
+      try {
+        final response = await http
+            .get(Uri.parse(imageUrl))
+            .timeout(const Duration(seconds: 8));
+        if (response.statusCode == 200 &&
+            response.bodyBytes.length <= 5 * 1024 * 1024) {
+          largeImage = ByteArrayAndroidBitmap(response.bodyBytes);
+        }
+      } catch (_) {
+        // Text notification remains available when rich media cannot load.
+      }
+    }
     await _local.show(
       id: (message.messageId ?? '${title}_$body').hashCode,
       title: title,
@@ -267,6 +284,13 @@ class PushNotificationBootstrap {
           channelDescription: channel.description,
           importance: channel.importance,
           priority: Priority.defaultPriority,
+          styleInformation: largeImage == null
+              ? null
+              : BigPictureStyleInformation(
+                  largeImage,
+                  contentTitle: title,
+                  summaryText: body,
+                ),
         ),
       ),
       payload: jsonEncode(message.data),
@@ -292,6 +316,12 @@ class PushNotificationBootstrap {
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (FirebaseAuth.instance.currentUser == null) return;
+      if (data['tapAction'] == 'none') return;
+      final link = Uri.tryParse(data['linkUrl'] ?? '');
+      if (link != null && link.scheme == 'https' && link.host.isNotEmpty) {
+        launchUrl(link, mode: LaunchMode.externalApplication);
+        return;
+      }
       final routeName = data['routeName'];
       if (!NotificationRouteAllowlist.isAllowed(routeName)) {
         appRouter.push(AppRoutes.notifications);

@@ -33,6 +33,20 @@ void main() {
       expect(n.status, NotificationStatus.read);
     });
 
+    test('parses notification image and destination link', () {
+      final n = AppNotification.fromMap('media', {
+        'title': 'New feature',
+        'body': 'See what changed.',
+        'imageUrl': 'https://cdn.sabibom.com/feature.jpg',
+        'imageCid': 'bafybeigdyrzt1234567890',
+        'metadata': {'linkUrl': 'https://sabibom.com/help'},
+      });
+
+      expect(n.imageUrl, 'https://cdn.sabibom.com/feature.jpg');
+      expect(n.imageCid, 'bafybeigdyrzt1234567890');
+      expect(n.linkUrl, 'https://sabibom.com/help');
+    });
+
     test('route allowlist rejects arbitrary routes', () {
       expect(NotificationRouteAllowlist.isAllowed('products'), isTrue);
       expect(NotificationRouteAllowlist.isAllowed('productDetails'), isTrue);

@@ -1805,62 +1805,61 @@ class ReceiptPdfService {
   }
 
   pw.Widget _signatureRow(_ReceiptRenderContext ctx) {
-    if (_showPaidStampImage(ctx)) {
-      try {
-        final bytes = base64Decode(ctx.layout.paidStampImageBase64!.trim());
-        return pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 18),
-          child: pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.SizedBox(
-              width: 170,
-              height: 52,
-              child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
-            ),
-          ),
-        );
-      } catch (_) {
-        // Fall back to text stamp or signature lines when stored payload is invalid.
-      }
-    }
-
     final signatureScale = ctx.layout.signatureScale.clamp(0.7, 1.8);
+    pw.Widget signatureWidget;
     if (ctx.layout.signatureMode != ReceiptSignatureMode.placeholder &&
         (ctx.layout.signatureImageBase64?.trim().isNotEmpty ?? false)) {
       try {
         final bytes = base64Decode(ctx.layout.signatureImageBase64!.trim());
-        return pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 18),
-          child: pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.SizedBox(
-              width: 170 * signatureScale,
-              height: 52 * signatureScale,
-              child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
-            ),
-          ),
+        signatureWidget = pw.SizedBox(
+          width: 170 * signatureScale,
+          height: 52 * signatureScale,
+          child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
         );
       } catch (_) {
-        // Fall back to signature lines when stored payload is invalid.
+        signatureWidget = pw.SizedBox();
+      }
+    } else {
+      signatureWidget = pw.Container(
+        width: 160,
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(top: pw.BorderSide(width: 0.8)),
+        ),
+        padding: const pw.EdgeInsets.only(top: 4),
+        child: pw.Text(
+          'Authorized signature',
+          style: pw.TextStyle(fontSize: 8, color: ctx.text),
+        ),
+      );
+    }
+
+    pw.Widget? paidStampWidget;
+    if (_showPaidStampImage(ctx)) {
+      try {
+        final bytes = base64Decode(ctx.layout.paidStampImageBase64!.trim());
+        paidStampWidget = pw.SizedBox(
+          width: 170,
+          height: 52,
+          child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
+        );
+      } catch (_) {
+        paidStampWidget = pw.SizedBox();
       }
     }
 
-    pw.Widget line(String label) => pw.Container(
-      width: 160,
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(width: 0.8)),
-      ),
-      padding: const pw.EdgeInsets.only(top: 4),
-      child: pw.Text(label, style: pw.TextStyle(fontSize: 8, color: ctx.text)),
-    );
+    final children = <pw.Widget>[
+      pw.Expanded(child: pw.Align(alignment: pw.Alignment.centerLeft, child: signatureWidget)),
+    ];
+    if (paidStampWidget != null) {
+      children.add(pw.SizedBox(width: 16));
+      children.add(pw.Align(alignment: pw.Alignment.centerRight, child: paidStampWidget));
+    }
+
     return pw.Padding(
-      padding: const pw.EdgeInsets.only(top: 28),
+      padding: const pw.EdgeInsets.only(top: 18),
       child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: <pw.Widget>[
-          line('Authorized signature'),
-          line('Customer signature'),
-        ],
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: children,
       ),
     );
   }

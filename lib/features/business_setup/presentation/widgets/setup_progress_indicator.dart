@@ -22,7 +22,7 @@ class SetupProgressIndicator extends StatelessWidget {
         Text(
           'Step $currentStep of $totalSteps',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: AppColors.text,
+            color: context.textColor,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -32,8 +32,8 @@ class SetupProgressIndicator extends StatelessWidget {
           child: LinearProgressIndicator(
             value: progress,
             minHeight: 8,
-            backgroundColor: const Color(0xFFE9E8FE),
-            color: AppColors.primary,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
       ],

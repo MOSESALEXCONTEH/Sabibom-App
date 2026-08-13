@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/business_setup_data.dart';
 import '../../domain/business_operating_model.dart';
@@ -46,11 +47,16 @@ class BusinessDetailsStep extends StatelessWidget {
             width: 96,
             height: 96,
             decoration: BoxDecoration(
+              shape: BoxShape.circle,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFD0D5DD)),
-              color: Colors.white,
+              border: Border.all(color: context.borderColor),
+              color: context.surfaceColor,
             ),
-            child: const Icon(Icons.storefront_outlined, size: 38),
+            child: Icon(
+              Icons.storefront_outlined,
+              size: 38,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.lg),

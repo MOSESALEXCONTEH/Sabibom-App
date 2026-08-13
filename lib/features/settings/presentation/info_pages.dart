@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_spacing.dart';
 
-/// Privacy policy for SabiBom.
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
 
@@ -16,41 +15,53 @@ class PrivacyPolicyScreen extends StatelessWidget {
         _Section(
           title: 'What we collect',
           body:
-              'SabiBom stores business data you enter — products, sales, customers, '
-              'receipts, and account details needed to run your shop. Device tokens '
-              'may be used for notifications when you allow them.',
+              'SabiBom processes the account and business data you enter, including '
+              'branches, products or services, inventory, customers, suppliers, '
+              'sales, purchases, expenses, receipts, staff access, and reports. '
+              'Device tokens are used for notifications when you allow them.',
         ),
         _Section(
           title: 'How we use it',
           body:
-              'Data is used to power your inventory, sales, receipts, and Sabi '
-              'assistant features. We do not sell your business records.',
+              'Data powers your business workflows and Sabi assistant, secures the '
+              'service, provides support, and improves reliability. We do not sell '
+              'your personal information or business records.',
         ),
         _Section(
-          title: 'Images and files',
+          title: 'Optional device access',
           body:
-              'Business logos you upload may be stored on IPFS via Pinata so they '
-              'can appear on receipts and your profile. Only images you choose to '
-              'upload are sent.',
+              'Camera, photo, file, and microphone data are accessed only when you '
+              'choose features such as image capture, attachments, barcode workflows, '
+              'or Sabi voice input. You can revoke optional permissions in Android settings.',
         ),
         _Section(
-          title: 'Your control',
+          title: 'Diagnostics and service providers',
           body:
-              'You can update or remove business information from the app. Sign out '
-              'anytime from More. You can submit and track account or business '
-              'deletion requests from Settings, Data and privacy.',
+              'SabiBom uses managed providers for authentication, cloud data, files, '
+              'app verification, notifications, analytics, crash reporting, performance '
+              'monitoring, hosting, and supported AI features. Limited device and usage '
+              'diagnostics help us secure and improve the service.',
+        ),
+        _Section(
+          title: 'Retention and deletion',
+          body:
+              'We retain data while needed to operate your account. Approved deletion '
+              'requests remove or anonymize covered data, except records temporarily '
+              'retained for security, fraud prevention, accounting, disputes, or legal '
+              'obligations. Submit requests from Settings, Data and privacy, or visit '
+              'https://sabibom.com/delete-account.',
         ),
         _Section(
           title: 'Contact',
           body:
-              'Questions about privacy can be sent through Help and Support in the app.',
+              'Questions can be sent to support@sabibom.com. The complete policy is '
+              'available at https://sabibom.com/privacy.',
         ),
       ],
     ),
   );
 }
 
-/// Terms of use for SabiBom.
 class TermsScreen extends StatelessWidget {
   const TermsScreen({super.key});
 
@@ -63,34 +74,54 @@ class TermsScreen extends StatelessWidget {
         _Section(
           title: 'Using SabiBom',
           body:
-              'SabiBom is a business operations tool for small shops. You are '
-              'responsible for the accuracy of sales, stock, and customer records '
-              'you enter.',
+              'SabiBom is a business operations tool. You are responsible for the '
+              'accuracy of sales, stock, customer, supplier, expense, and other '
+              'records you enter and for using the service lawfully.',
         ),
         _Section(
-          title: 'Accounts',
+          title: 'Accounts and staff',
           body:
-              'Keep your login private. Owners are responsible for staff access on '
-              'shared devices. Do not use the service for unlawful activity.',
+              'Keep your login private. Business owners are responsible for staff '
+              'roles, permissions, and branch access. Do not attempt to bypass '
+              'security or access another business without authorization.',
         ),
         _Section(
           title: 'Service availability',
           body:
-              'Features may change as we improve the product. We work to keep the '
-              'app reliable but cannot guarantee uninterrupted access.',
+              'Features may change as the product improves. We work to keep SabiBom '
+              'reliable but cannot guarantee uninterrupted or error-free access.',
         ),
         _Section(
-          title: 'Data and receipts',
+          title: 'Records and advice',
           body:
-              'Receipts and reports are based on the data in your account. Review '
-              'totals before sharing with customers.',
+              'Receipts and reports depend on your account data. Review important '
+              'totals before relying on them. SabiBom is not a bank, accountant, tax '
+              'adviser, lawyer, or auditor.',
+        ),
+        _Section(
+          title: 'Sabi assistance',
+          body:
+              'AI-assisted responses may be incomplete or incorrect. Review proposed '
+              'actions, totals, and reports before relying on them or saving records.',
+        ),
+        _Section(
+          title: 'Plans and payments',
+          body:
+              'Features may depend on a free, trial, complimentary, or paid plan. Any '
+              'paid Android subscription offered inside the app will use the payment '
+              'terms presented through Google Play.',
+        ),
+        _Section(
+          title: 'Contact',
+          body:
+              'Questions can be sent to support@sabibom.com. The complete terms are '
+              'available at https://sabibom.com/terms.',
         ),
       ],
     ),
   );
 }
 
-/// Help center with common questions and support guidance.
 class HelpSupportScreen extends StatelessWidget {
   const HelpSupportScreen({super.key});
 
@@ -114,11 +145,11 @@ class HelpSupportScreen extends StatelessWidget {
         const _Faq(
           question: 'How do I record a sale?',
           answer:
-              'Open Sales → New sale, add items, then checkout. You can also ask '
-              'Sabi to draft a sale from voice or text.',
+              'Open Sales, select New sale, add items, then checkout. You can also '
+              'ask Sabi to draft a sale from voice or text.',
         ),
         const _Faq(
-          question: 'Why won’t my business logo upload?',
+          question: 'Why will my business logo not upload?',
           answer:
               'Use JPEG, PNG, or WebP under about 1.5 MB after compression. Make '
               'sure you are online and signed in as the owner or manager.',
@@ -126,7 +157,7 @@ class HelpSupportScreen extends StatelessWidget {
         const _Faq(
           question: 'Where do tax and currency apply?',
           answer:
-              'Set them under More → Tax and Currency. They affect checkout totals '
+              'Set them under More, Tax and Currency. They affect checkout totals '
               'and receipt display.',
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -135,7 +166,7 @@ class HelpSupportScreen extends StatelessWidget {
             leading: const Icon(Icons.support_agent_outlined),
             title: const Text('Need more help?'),
             subtitle: const Text(
-              'Describe the issue from your business account email so we can look up your workspace.',
+              'Describe the issue from your business account email so support can identify your workspace.',
             ),
             onTap: () {
               showDialog<void>(
@@ -143,8 +174,9 @@ class HelpSupportScreen extends StatelessWidget {
                 builder: (context) => AlertDialog(
                   title: const Text('Contact support'),
                   content: const Text(
-                    'Email support with your business name, the screen you were on, '
-                    'and what went wrong. Include screenshots when possible.',
+                    'Email support@sabibom.com with your business name, the screen '
+                    'you were on, and what went wrong. Include screenshots when '
+                    'possible. Never send passwords, PINs, private keys, or payment credentials.',
                   ),
                   actions: <Widget>[
                     FilledButton(
@@ -162,7 +194,6 @@ class HelpSupportScreen extends StatelessWidget {
   );
 }
 
-/// About the SabiBom product.
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
@@ -185,22 +216,15 @@ class AboutScreen extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         const Text(
-          'SabiBom helps small businesses manage products, sales, customers, '
-          'receipts, and day-to-day operations — with Sabi as your assistant.',
-        ),
-        const SizedBox(height: AppSpacing.md),
-        const Text(
-          'Built for shop owners who need clear stock, trustworthy receipts, and '
-          'tools that work on mobile.',
+          'SabiBom helps small businesses manage products or services, sales, '
+          'customers, receipts, branches, and day-to-day operations with Sabi as an assistant.',
         ),
         const SizedBox(height: AppSpacing.lg),
-        Card(
+        const Card(
           child: ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('Version'),
-            subtitle: const Text(
-              'Check your store listing for the latest build.',
-            ),
+            leading: Icon(Icons.info_outline),
+            title: Text('Version'),
+            subtitle: Text('1.0.0'),
           ),
         ),
       ],

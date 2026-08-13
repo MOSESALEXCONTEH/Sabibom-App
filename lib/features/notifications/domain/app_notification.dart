@@ -284,6 +284,9 @@ class AppNotification {
     this.routeName,
     this.routeParameters = const {},
     this.actionLabel,
+    this.imageUrl,
+    this.imageCid,
+    this.linkUrl,
     this.deduplicationKey,
     this.sourceType,
     this.sourceId,
@@ -311,6 +314,9 @@ class AppNotification {
   final String? routeName;
   final Map<String, String> routeParameters;
   final String? actionLabel;
+  final String? imageUrl;
+  final String? imageCid;
+  final String? linkUrl;
   final String? deduplicationKey;
   final String? sourceType;
   final String? sourceId;
@@ -378,6 +384,15 @@ class AppNotification {
       routeName: data['routeName'] as String?,
       routeParameters: routeParams,
       actionLabel: data['actionLabel'] as String?,
+      imageUrl:
+          data['imageUrl'] as String? ??
+          (meta['imageUrl'] is String ? meta['imageUrl'] as String : null),
+      imageCid:
+          data['imageCid'] as String? ??
+          (meta['imageCid'] is String ? meta['imageCid'] as String : null),
+      linkUrl:
+          data['linkUrl'] as String? ??
+          (meta['linkUrl'] is String ? meta['linkUrl'] as String : null),
       deduplicationKey: data['deduplicationKey'] as String?,
       sourceType: data['sourceType'] as String?,
       sourceId: data['sourceId'] as String?,
@@ -410,6 +425,9 @@ class AppNotification {
       'routeName': routeName,
       'routeParameters': routeParameters,
       'actionLabel': actionLabel,
+      'imageUrl': imageUrl,
+      'imageCid': imageCid,
+      'linkUrl': linkUrl,
       'deduplicationKey': deduplicationKey,
       'sourceType': sourceType,
       'sourceId': sourceId,
