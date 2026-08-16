@@ -19,6 +19,8 @@ class ProductDraft {
     this.barcode,
     this.description,
     this.categoryName,
+    this.imageUrl,
+    this.imageCid,
   });
 
   final String name;
@@ -26,6 +28,8 @@ class ProductDraft {
   final String? barcode;
   final String? description;
   final String? categoryName;
+  final String? imageUrl;
+  final String? imageCid;
   final int sellingPriceMinor;
   final int costPriceMinor;
   final bool trackStock;
@@ -65,28 +69,43 @@ class StockAdjustmentRequest {
 
 abstract interface class ProductsRepository {
   Stream<List<Product>> watchProducts(String businessId, {String? branchId});
-  Future<Product?> getProduct(String businessId, String productId, {String? branchId});
-  Future<String> createProduct(String businessId, ProductDraft draft, {String? branchId});
+  Future<Product?> getProduct(
+    String businessId,
+    String productId, {
+    String? branchId,
+  });
+  Future<String> createProduct(
+    String businessId,
+    ProductDraft draft, {
+    String? branchId,
+    bool queueWhenOffline = false,
+  });
   Future<void> updateProduct(
     String businessId,
     String productId,
     ProductDraft draft, {
     String? branchId,
-  }
-  );
+  });
   Future<void> setProductStatus(
     String businessId,
     String productId,
     ProductStatus status, {
     String? branchId,
-  }
-  );
+  });
 
   /// Permanently removes an archived product with zero stock.
   /// Sales history is kept; the product record is deleted.
-  Future<void> deleteArchivedProduct(String businessId, String productId, {String? branchId});
+  Future<void> deleteArchivedProduct(
+    String businessId,
+    String productId, {
+    String? branchId,
+  });
 
-  Future<void> adjustStock(String businessId, StockAdjustmentRequest request, {String? branchId});
+  Future<void> adjustStock(
+    String businessId,
+    StockAdjustmentRequest request, {
+    String? branchId,
+  });
   Future<void> disposeExpiredStock(
     String businessId, {
     required String batchId,

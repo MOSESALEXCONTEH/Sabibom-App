@@ -26,6 +26,7 @@ abstract class ExpensesRepository {
     String businessId,
     ExpenseDraft draft, {
     String? branchId,
+    bool queueWhenOffline = false,
   });
   Future<void> updateExpense(
     String businessId,
@@ -182,6 +183,7 @@ class FirestoreExpensesRepository implements ExpensesRepository {
     String businessId,
     ExpenseDraft draft, {
     String? branchId,
+    bool queueWhenOffline = false,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw const ExpenseException('unauthenticated');
@@ -190,6 +192,14 @@ class FirestoreExpensesRepository implements ExpensesRepository {
     }
     _validateDraft(draft);
     final writableBranchId = _requireBranchId(branchId);
+    if (queueWhenOffline) {
+      return _createExpenseOffline(
+        businessId: businessId,
+        draft: draft,
+        branchId: writableBranchId,
+        user: user,
+      );
+    }
 
     final business = _business(businessId);
     final expenseRef = _expenses(businessId).doc();
@@ -272,6 +282,56 @@ class FirestoreExpensesRepository implements ExpensesRepository {
     } on FirebaseException catch (e) {
       throw ExpenseException(e.code, message: e.message);
     }
+  }
+
+  Future<String> _createExpenseOffline({
+    required String businessId,
+    required ExpenseDraft draft,
+    required String branchId,
+    required User user,
+  }) async {
+    final business = _business(businessId);
+    final expenseRef = _expenses(businessId).doc();
+    final activity = business.collection('activity').doc();
+    final localNow = DateTime.now();
+    final dateKey = DateFormat('yyyyMMdd').format(draft.expenseDate.toLocal());
+    final analytics = business
+        .collection('analytics')
+        .doc('daily_${dateKey}_$branchId');
+    final expenseNumber =
+        'EXP-OFFLINE-${DateFormat('yyyyMMddHHmmss').format(localNow)}';
+    final batch = _firestore.batch();
+    batch.set(
+      expenseRef,
+      _draftMap(
+        draft,
+        businessId: businessId,
+        expenseNumber: expenseNumber,
+        uid: user.uid,
+        displayName: user.displayName ?? user.email,
+        branchId: branchId,
+      ),
+    );
+    batch.set(analytics, <String, Object?>{
+      'dateKey': dateKey,
+      'branchId': branchId,
+      'expenseMinor': FieldValue.increment(draft.amountMinor),
+      'expenseCount': FieldValue.increment(1),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    batch.set(activity, <String, Object?>{
+      'businessId': businessId,
+      'branchId': branchId,
+      'type': 'expense',
+      'title': 'Expense recorded',
+      'subtitle': '${draft.categoryName}: ${draft.description.trim()}',
+      'amountMinor': draft.amountMinor,
+      'referenceId': expenseRef.id,
+      'createdBy': user.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return expenseRef.id;
   }
 
   @override

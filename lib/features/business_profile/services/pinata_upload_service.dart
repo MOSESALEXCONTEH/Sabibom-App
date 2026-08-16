@@ -51,6 +51,18 @@ abstract class PinataUploadService {
     required CompressedImage image,
     void Function(double progress)? onProgress,
   });
+
+  Future<PinataUploadResult> uploadProductImage({
+    required String businessId,
+    required CompressedImage image,
+    void Function(double progress)? onProgress,
+  });
+
+  Future<PinataUploadResult> uploadCustomerPhoto({
+    required String businessId,
+    required CompressedImage image,
+    void Function(double progress)? onProgress,
+  });
 }
 
 /// Uploads via Firebase callables (Pinata secrets live there), with Vercel fallback.
@@ -79,43 +91,68 @@ class FirebasePinataUploadService implements PinataUploadService {
     required String businessId,
     required CompressedImage image,
     void Function(double progress)? onProgress,
-  }) =>
-      _uploadImage(
-        businessId: businessId,
-        image: image,
-        purpose: 'business_logo',
-        onProgress: onProgress,
-        persistLogoOnBusiness: true,
-      );
+  }) => _uploadImage(
+    businessId: businessId,
+    image: image,
+    purpose: 'business_logo',
+    onProgress: onProgress,
+    persistLogoOnBusiness: true,
+  );
 
   @override
   Future<PinataUploadResult> uploadExpenseReceipt({
     required String businessId,
     required CompressedImage image,
     void Function(double progress)? onProgress,
-  }) =>
-      _uploadImage(
-        businessId: businessId,
-        image: image,
-        purpose: 'expense_receipt',
-        onProgress: onProgress,
-        persistLogoOnBusiness: false,
-      );
+  }) => _uploadImage(
+    businessId: businessId,
+    image: image,
+    purpose: 'expense_receipt',
+    onProgress: onProgress,
+    persistLogoOnBusiness: false,
+  );
 
   @override
   Future<PinataUploadResult> uploadFeedbackAttachment({
     required String businessId,
     required CompressedImage image,
     void Function(double progress)? onProgress,
-  }) =>
-      _uploadImage(
-        businessId: businessId,
-        image: image,
-        purpose: 'feedback_attachment',
-        onProgress: onProgress,
-        persistLogoOnBusiness: false,
-        allowFirebaseFallback: false,
-      );
+  }) => _uploadImage(
+    businessId: businessId,
+    image: image,
+    purpose: 'feedback_attachment',
+    onProgress: onProgress,
+    persistLogoOnBusiness: false,
+    allowFirebaseFallback: false,
+  );
+
+  @override
+  Future<PinataUploadResult> uploadProductImage({
+    required String businessId,
+    required CompressedImage image,
+    void Function(double progress)? onProgress,
+  }) => _uploadImage(
+    businessId: businessId,
+    image: image,
+    purpose: 'product_image',
+    onProgress: onProgress,
+    persistLogoOnBusiness: false,
+    allowFirebaseFallback: false,
+  );
+
+  @override
+  Future<PinataUploadResult> uploadCustomerPhoto({
+    required String businessId,
+    required CompressedImage image,
+    void Function(double progress)? onProgress,
+  }) => _uploadImage(
+    businessId: businessId,
+    image: image,
+    purpose: 'customer_photo',
+    onProgress: onProgress,
+    persistLogoOnBusiness: false,
+    allowFirebaseFallback: false,
+  );
 
   Future<PinataUploadResult> _uploadImage({
     required String businessId,
@@ -172,17 +209,17 @@ class FirebasePinataUploadService implements PinataUploadService {
 
     onProgress?.call(0.9);
     if (persistLogoOnBusiness) {
-      await _firestore.collection('businesses').doc(businessId).set(
-        <String, Object?>{
-          'logoUrl': uploaded.logoUrl,
-          'logoCid': uploaded.cid,
-          'logoFileName': uploaded.fileName,
-          'logoMimeType': uploaded.mimeType,
-          'logoUpdatedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .set(<String, Object?>{
+            'logoUrl': uploaded.logoUrl,
+            'logoCid': uploaded.cid,
+            'logoFileName': uploaded.fileName,
+            'logoMimeType': uploaded.mimeType,
+            'logoUpdatedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     }
     onProgress?.call(1);
     return uploaded;
@@ -227,7 +264,11 @@ class FirebasePinataUploadService implements PinataUploadService {
         'base64Data': base64Encode(image.bytes),
       });
       final pinned = _asStringKeyedMap(proxyResponse.data);
-      return _resultFromMap(pinned, fallbackFileName: fileName, fallbackMime: mimeType);
+      return _resultFromMap(
+        pinned,
+        fallbackFileName: fileName,
+        fallbackMime: mimeType,
+      );
     }
 
     if (uploadUrl == null || uploadUrl.isEmpty) {
@@ -249,7 +290,10 @@ class FirebasePinataUploadService implements PinataUploadService {
     }
     onProgress?.call(0.75);
     final gateway = (gatewayBaseUrl).replaceAll(RegExp(r'/$'), '');
-    final base = gateway.replaceFirst(RegExp(r'/ipfs$', caseSensitive: false), '');
+    final base = gateway.replaceFirst(
+      RegExp(r'/ipfs$', caseSensitive: false),
+      '',
+    );
     return PinataUploadResult(
       cid: cid,
       logoUrl: '$base/ipfs/$cid',
@@ -299,15 +343,13 @@ class FirebasePinataUploadService implements PinataUploadService {
     final uri = Uri.parse(uploadUrl);
     final request = http.MultipartRequest('POST', uri)
       ..files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: fileName,
-        ),
+        http.MultipartFile.fromBytes('file', bytes, filename: fileName),
       )
       ..fields['network'] = 'public';
 
-    final streamed = await _http.send(request).timeout(const Duration(seconds: 60));
+    final streamed = await _http
+        .send(request)
+        .timeout(const Duration(seconds: 60));
     final body = await streamed.stream.bytesToString();
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
       // Some Pinata signed URLs expect a raw PUT body instead of multipart.
@@ -364,7 +406,8 @@ class FirebasePinataUploadService implements PinataUploadService {
       final data = map['data'];
       if (data is Map) {
         final nested = Map<String, dynamic>.from(data);
-        final nestedCid = nested['cid'] as String? ?? nested['IpfsHash'] as String?;
+        final nestedCid =
+            nested['cid'] as String? ?? nested['IpfsHash'] as String?;
         if (nestedCid != null && nestedCid.isNotEmpty) return nestedCid;
       }
       return map['cid'] as String? ?? map['IpfsHash'] as String?;

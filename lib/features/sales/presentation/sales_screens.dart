@@ -6,10 +6,12 @@ import 'package:go_router/go_router.dart';
 import '../../../app/router.dart';
 import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/formatting/record_date_filter.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_list_primitives.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../../core/widgets/app_tab_page_scaffold.dart';
@@ -279,7 +281,12 @@ class _SalesHistory extends ConsumerWidget {
                             const SizedBox(height: AppSpacing.sm),
                         itemBuilder: (context, index) {
                           final sale = filteredItems[index];
-                          final canVoid = sale.saleStatus != SaleStatus.voided;
+                          final isPendingSync = sale.receiptNumber.startsWith(
+                            'Pending ',
+                          );
+                          final canVoid =
+                              !isPendingSync &&
+                              sale.saleStatus != SaleStatus.voided;
                           final tile = AppListRow(
                             onTap: () => SalesNavigation.openSaleDetails(
                               context,
@@ -609,19 +616,36 @@ class _NewSaleScreenState extends ConsumerState<NewSaleScreen> {
                                   children: <Widget>[
                                     Row(
                                       children: <Widget>[
-                                        CircleAvatar(
-                                          radius: 17,
-                                          backgroundColor: context.brandTint,
-                                          child: Icon(
-                                            product.isOutOfStock
-                                                ? Icons.block
-                                                : Icons.inventory_2_outlined,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                            size: 19,
-                                          ),
-                                        ),
+                                        (product.imageUrl ?? '')
+                                                .trim()
+                                                .isNotEmpty
+                                            ? AppNetworkImage(
+                                                url: product.imageUrl!,
+                                                width: 34,
+                                                height: 34,
+                                                borderRadius:
+                                                    BorderRadius.circular(17),
+                                                fallbackIcon:
+                                                    product.isOutOfStock
+                                                    ? Icons.block
+                                                    : Icons
+                                                          .inventory_2_outlined,
+                                              )
+                                            : CircleAvatar(
+                                                radius: 17,
+                                                backgroundColor:
+                                                    context.brandTint,
+                                                child: Icon(
+                                                  product.isOutOfStock
+                                                      ? Icons.block
+                                                      : Icons
+                                                            .inventory_2_outlined,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                  size: 19,
+                                                ),
+                                              ),
                                         const SizedBox(width: 4),
                                         if (cartItem != null)
                                           Expanded(
@@ -1373,10 +1397,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               branchId: branchId,
               branchNameSnapshot: branch.name,
               branchCodeSnapshot: branch.code,
+              queueWhenOffline:
+                  ref.read(isOnlineProvider).asData?.value == false,
             ),
           );
       ref.read(saleCartProvider.notifier).finishSubmission(succeeded: true);
       if (mounted) {
+        if (ref.read(isOnlineProvider).asData?.value == false) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sale saved. Waiting to sync.')),
+          );
+        }
         context.go(
           '${AppRoutes.sales}/success/${completed.saleId}',
           extra: completed,
@@ -1495,13 +1526,20 @@ class SaleCompleteScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Sale completed',
+                    completed?.isPendingSync == true
+                        ? 'Sale saved offline'
+                        : 'Sale completed',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(completed?.receiptNumber ?? 'Receipt ready'),
+                  Text(
+                    completed?.isPendingSync == true
+                        ? 'It will sync automatically when you reconnect.'
+                        : (completed?.receiptNumber ?? 'Receipt ready'),
+                    textAlign: TextAlign.center,
+                  ),
                   if (completed != null)
                     Text(formatCurrency(minorToMoney(completed!.totalMinor))),
                 ],
@@ -1529,23 +1567,25 @@ class SaleCompleteScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
               child: Column(
                 children: <Widget>[
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () =>
-                          SalesNavigation.openSaleReceipt(context, saleId),
-                      child: const Text('View Receipt'),
+                  ...<Widget>[
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () =>
+                            SalesNavigation.openSaleReceipt(context, saleId),
+                        child: const Text('View Receipt'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () =>
-                          SalesNavigation.openSaleDetails(context, saleId),
-                      child: const Text('View Sale Details'),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            SalesNavigation.openSaleDetails(context, saleId),
+                        child: const Text('View Sale Details'),
+                      ),
                     ),
-                  ),
+                  ],
                   TextButton(
                     onPressed: () => context.go(AppRoutes.sales),
                     child: const Text('Back to Sales'),

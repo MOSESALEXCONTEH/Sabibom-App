@@ -9,8 +9,10 @@ import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/formatting/record_date_filter.dart';
 import '../../../core/widgets/barcode_scanner_screen.dart';
 import '../../../core/sync/record_sync_status.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_list_primitives.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../../core/widgets/list_bulk_actions.dart';
@@ -611,6 +613,7 @@ class _NewPurchaseScreenState extends ConsumerState<NewPurchaseScreen> {
     setState(() => _submitting = true);
     _purchaseId ??= const Uuid().v4();
     try {
+      final isOnline = ref.read(isOnlineProvider).asData?.value ?? true;
       final result = await ref
           .read(purchasesRepositoryProvider)
           .completePurchase(
@@ -627,9 +630,15 @@ class _NewPurchaseScreenState extends ConsumerState<NewPurchaseScreen> {
               deliveryMinor: moneyToMinor(_deliveryController.text),
               amountPaidMinor: moneyToMinor(_paidController.text),
               paymentMethod: 'cash',
+              queueWhenOffline: !isOnline,
             ),
           );
       if (mounted) {
+        if (!isOnline) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Purchase saved. Waiting to sync.')),
+          );
+        }
         context.goNamed(
           AppRouteNames.purchaseDetails,
           pathParameters: <String, String>{'purchaseId': result.purchaseId},
@@ -926,6 +935,15 @@ class _ProductPicker extends StatelessWidget {
       ...products.map(
         (product) => ListTile(
           contentPadding: EdgeInsets.zero,
+          leading: (product.imageUrl ?? '').trim().isNotEmpty
+              ? AppNetworkImage(
+                  url: product.imageUrl!,
+                  width: 42,
+                  height: 42,
+                  borderRadius: BorderRadius.circular(8),
+                  fallbackIcon: Icons.inventory_2_outlined,
+                )
+              : const Icon(Icons.inventory_2_outlined),
           title: Text(product.name),
           subtitle: Text(
             'Cost: ${formatCurrency(minorToMoney(product.costPriceMinor))}',

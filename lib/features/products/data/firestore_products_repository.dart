@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/authenticated_api_client.dart';
+import '../../../core/sync/offline_mutation_queue.dart';
 import '../../inventory/domain/branch_inventory.dart';
 import '../../inventory/domain/expiry_status_calculator.dart';
 import '../../inventory/domain/product_profit_calculator.dart';
@@ -21,13 +22,16 @@ class FirestoreProductsRepository implements ProductsRepository {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     AuthenticatedApiClient? apiClient,
+    OfflineMutationQueue? offlineQueue,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _auth = auth ?? FirebaseAuth.instance,
-       _apiClient = apiClient ?? AuthenticatedApiClient();
+       _apiClient = apiClient ?? AuthenticatedApiClient(),
+       _offlineQueue = offlineQueue ?? OfflineMutationQueue();
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
   final AuthenticatedApiClient _apiClient;
+  final OfflineMutationQueue _offlineQueue;
 
   CollectionReference<Map<String, dynamic>> _products(String businessId) =>
       _firestore
@@ -279,6 +283,7 @@ class FirestoreProductsRepository implements ProductsRepository {
     String businessId,
     ProductDraft draft, {
     String? branchId,
+    bool queueWhenOffline = false,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw const ProductException('unauthenticated');
@@ -307,12 +312,23 @@ class FirestoreProductsRepository implements ProductsRepository {
       'initialStockExpiryDateKnown':
           draft.initialStockExpiryDateKnown &&
           draft.initialStockExpiryDate != null,
+      'imageUrl': draft.imageUrl,
+      'imageCid': draft.imageCid,
     };
+    if (queueWhenOffline) {
+      await _offlineQueue.enqueue(
+        id: 'product_$productId',
+        type: OfflineMutationType.productCreate,
+        businessId: businessId,
+        payload: body,
+      );
+      return productId;
+    }
     try {
       final response = await _apiClient.postJson(
         '/api/inventory/products/create',
         body: body,
-        timeout: const Duration(seconds: 60),
+        timeout: const Duration(seconds: 20),
       );
       await _ensureOpeningQuantity(
         businessId: businessId,
@@ -332,6 +348,15 @@ class FirestoreProductsRepository implements ProductsRepository {
           branchId: writableBranchId,
           uid: user.uid,
           createdByName: user.displayName ?? user.email ?? 'Team member',
+        );
+        return productId;
+      }
+      if (error.statusCode == null) {
+        await _offlineQueue.enqueue(
+          id: 'product_$productId',
+          type: OfflineMutationType.productCreate,
+          businessId: businessId,
+          payload: body,
         );
         return productId;
       }
@@ -597,7 +622,8 @@ class FirestoreProductsRepository implements ProductsRepository {
         'lowStockThreshold': draft.trackStock ? draft.lowStockThreshold : 0,
         'trackStock': draft.trackStock,
         'unit': draft.unit,
-        'imageUrl': null,
+        'imageUrl': draft.imageUrl,
+        'imageCid': draft.imageCid,
         'status': draft.status.name,
         'tracksExpiry': draft.tracksExpiry,
         'defaultExpiryReminderDays': draft.defaultExpiryReminderDays,
@@ -773,6 +799,8 @@ class FirestoreProductsRepository implements ProductsRepository {
             ? null
             : draft.description?.trim(),
         'categoryName': draft.categoryName,
+        'imageUrl': draft.imageUrl,
+        'imageCid': draft.imageCid,
         'sellingPriceMinor': draft.sellingPriceMinor,
         'costPriceMinor': draft.costPriceMinor,
         'sellingPrice': draft.sellingPriceMinor / 100,

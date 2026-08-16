@@ -30,6 +30,7 @@ abstract interface class SuppliersRepository {
     SupplierDraft draft, {
     bool allowDuplicatePhone = false,
     String? branchId,
+    bool queueWhenOffline = false,
   });
   Future<void> updateSupplier(
     String businessId,
@@ -129,6 +130,7 @@ class FirestoreSuppliersRepository implements SuppliersRepository {
     SupplierDraft draft, {
     bool allowDuplicatePhone = false,
     String? branchId,
+    bool queueWhenOffline = false,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw const SupplierException('unauthenticated');
@@ -137,7 +139,7 @@ class FirestoreSuppliersRepository implements SuppliersRepository {
     }
     _validateDraft(draft);
     final phone = _nullable(draft.phone);
-    if (!allowDuplicatePhone && phone != null) {
+    if (!queueWhenOffline && !allowDuplicatePhone && phone != null) {
       final existing = await findByNormalizedPhone(businessId, phone);
       if (existing != null) throw DuplicateSupplierException(existing);
     }

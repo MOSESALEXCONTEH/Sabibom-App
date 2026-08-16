@@ -53,6 +53,7 @@ class Product {
     this.categoryId,
     this.categoryName,
     this.imageUrl,
+    this.imageCid,
     this.createdBy,
     this.createdAt,
     this.updatedAt,
@@ -105,6 +106,7 @@ class Product {
       trackStock: data['trackStock'] as bool? ?? true,
       unit: data['unit'] as String? ?? 'Piece',
       imageUrl: data['imageUrl'] as String?,
+      imageCid: data['imageCid'] as String?,
       status: ProductStatus.fromStorage(data['status']),
       createdBy: data['createdBy'] as String?,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
@@ -156,6 +158,7 @@ class Product {
   final bool trackStock;
   final String unit;
   final String? imageUrl;
+  final String? imageCid;
   final ProductStatus status;
   final String? createdBy;
   final DateTime? createdAt;
@@ -224,6 +227,7 @@ class Product {
       trackStock: trackStock,
       unit: unit,
       imageUrl: imageUrl,
+      imageCid: imageCid,
       status: status,
       createdBy: createdBy,
       createdAt: createdAt,
@@ -271,6 +275,7 @@ class Product {
         'trackStock': trackStock,
         'unit': unit,
         'imageUrl': imageUrl,
+        'imageCid': imageCid,
         'status': status.name,
         'tracksExpiry': tracksExpiry,
         'defaultExpiryReminderDays': defaultExpiryReminderDays,

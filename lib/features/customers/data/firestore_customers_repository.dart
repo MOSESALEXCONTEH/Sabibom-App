@@ -86,6 +86,7 @@ class FirestoreCustomersRepository implements CustomersRepository {
     CustomerDraft draft, {
     bool allowDuplicatePhone = false,
     String? branchId,
+    bool queueWhenOffline = false,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw const CustomerException('unauthenticated');
@@ -93,7 +94,27 @@ class FirestoreCustomersRepository implements CustomersRepository {
     final writableBranchId = _requireBranchId(branchId);
 
     final phone = draft.phone?.trim();
-    if (!allowDuplicatePhone && phone != null && phone.isNotEmpty) {
+    if (queueWhenOffline &&
+        !allowDuplicatePhone &&
+        phone != null &&
+        phone.isNotEmpty) {
+      try {
+        final cached = await _customers(businessId)
+            .where('phoneNormalized', isEqualTo: Customer.normalizePhone(phone))
+            .get(const GetOptions(source: Source.cache));
+        for (final document in cached.docs) {
+          if (matchesBranchScope(document.data(), writableBranchId)) {
+            throw DuplicateCustomerException(Customer.fromFirestore(document));
+          }
+        }
+      } on FirebaseException {
+        // No cached index is available. The write can still be safely queued.
+      }
+    }
+    if (!queueWhenOffline &&
+        !allowDuplicatePhone &&
+        phone != null &&
+        phone.isNotEmpty) {
       final existing = await findByNormalizedPhone(
         businessId,
         phone,
@@ -104,18 +125,20 @@ class FirestoreCustomersRepository implements CustomersRepository {
       }
     }
 
-    final branchSnapshot = await _firestore
-        .collection('businesses')
-        .doc(businessId)
-        .collection('branches')
-        .doc(writableBranchId)
-        .get();
-    if (!branchSnapshot.exists ||
-        branchSnapshot.data()?['status'] != 'active') {
-      throw const CustomerException(
-        'failed-precondition',
-        message: 'This branch is inactive and cannot create customers.',
-      );
+    if (!queueWhenOffline) {
+      final branchSnapshot = await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('branches')
+          .doc(writableBranchId)
+          .get();
+      if (!branchSnapshot.exists ||
+          branchSnapshot.data()?['status'] != 'active') {
+        throw const CustomerException(
+          'failed-precondition',
+          message: 'This branch is inactive and cannot create customers.',
+        );
+      }
     }
 
     final reference = _customers(businessId).doc();
@@ -131,6 +154,8 @@ class FirestoreCustomersRepository implements CustomersRepository {
           ? null
           : draft.address?.trim(),
       'notes': draft.notes?.trim().isEmpty == true ? null : draft.notes?.trim(),
+      'photoUrl': draft.photoUrl,
+      'photoCid': draft.photoCid,
       'usesWhatsApp': draft.usesWhatsApp,
       'balanceMinor': 0,
       'balance': 0,
@@ -166,6 +191,8 @@ class FirestoreCustomersRepository implements CustomersRepository {
           ? null
           : draft.address?.trim(),
       'notes': draft.notes?.trim().isEmpty == true ? null : draft.notes?.trim(),
+      'photoUrl': draft.photoUrl,
+      'photoCid': draft.photoCid,
       'usesWhatsApp': draft.usesWhatsApp,
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': user.uid,

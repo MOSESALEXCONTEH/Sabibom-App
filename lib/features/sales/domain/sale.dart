@@ -93,7 +93,12 @@ class Sale {
       receiptTemplateSnapshot: data['receiptTemplateSnapshot'] is Map
           ? Map<String, dynamic>.from(data['receiptTemplateSnapshot'] as Map)
           : null,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      createdAt: switch (data['createdAt']) {
+        Timestamp value => value.toDate(),
+        DateTime value => value,
+        String value => DateTime.tryParse(value),
+        _ => null,
+      },
     );
   }
 

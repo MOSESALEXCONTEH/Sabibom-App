@@ -126,18 +126,21 @@ class Purchase {
   final DateTime? createdAt;
 
   factory Purchase.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? const <String, dynamic>{};
+    return Purchase.fromMap(doc.id, doc.data() ?? const <String, dynamic>{});
+  }
+
+  factory Purchase.fromMap(String id, Map<String, dynamic> data) {
     final items = (data['items'] as List<dynamic>? ?? const <dynamic>[])
         .whereType<Map>()
         .map((item) => PurchaseItem.fromMap(Map<String, dynamic>.from(item)))
         .toList();
     return Purchase(
-      purchaseId: doc.id,
+      purchaseId: id,
       businessId: data['businessId'] as String? ?? '',
       branchId: (data['branchId'] as String?)?.trim(),
       branchNameSnapshot: (data['branchNameSnapshot'] as String?)?.trim(),
       branchCodeSnapshot: (data['branchCodeSnapshot'] as String?)?.trim(),
-      purchaseNumber: data['purchaseNumber'] as String? ?? doc.id,
+      purchaseNumber: data['purchaseNumber'] as String? ?? id,
       supplierId: data['supplierId'] as String? ?? '',
       supplierName: data['supplierName'] as String? ?? 'Unknown supplier',
       items: items,
@@ -157,7 +160,12 @@ class Purchase {
         orElse: () => PurchasePaymentStatus.unpaid,
       ),
       paymentMethod: data['paymentMethod'] as String?,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      createdAt: switch (data['createdAt']) {
+        Timestamp value => value.toDate(),
+        DateTime value => value,
+        String value => DateTime.tryParse(value),
+        _ => null,
+      },
     );
   }
 }

@@ -1,12 +1,21 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/router.dart';
 import '../../../core/formatting/currency_formatter.dart';
+import '../../../core/services/connectivity_service.dart';
+import '../../../core/services/image_compression_service.dart';
+import '../../../core/sync/offline_mutation_queue.dart';
+import '../../../core/sync/pending_media_store.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/barcode_scanner_screen.dart';
 import '../../branches/application/current_branch_providers.dart';
+import '../../business_profile/services/pinata_upload_service.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../business_setup/application/business_experience_providers.dart';
 import '../../inventory/domain/product_profit_calculator.dart';
@@ -74,6 +83,9 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
   var _status = ProductStatus.active;
   var _submitting = false;
   var _hydrated = false;
+  CompressedImage? _selectedImage;
+  String? _imageUrl;
+  String? _imageCid;
 
   @override
   void dispose() {
@@ -109,6 +121,8 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
     _tracksExpiry = product.tracksExpiry;
     _expiryReminderDays = product.defaultExpiryReminderDays;
     _status = product.status;
+    _imageUrl = product.imageUrl;
+    _imageCid = product.imageCid;
     if (productUnits.contains(product.unit)) {
       _unit = product.unit;
     } else {
@@ -176,6 +190,24 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: <Widget>[
+              Center(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: <Widget>[
+                    _ProductPhoto(bytes: _selectedImage?.bytes, url: _imageUrl),
+                    Positioned(
+                      right: -8,
+                      bottom: -8,
+                      child: IconButton.filledTonal(
+                        tooltip: 'Add product image',
+                        onPressed: _pickProductImage,
+                        icon: const Icon(Icons.add_a_photo_outlined),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
               TextFormField(
                 controller: _name,
                 decoration: InputDecoration(
@@ -585,54 +617,100 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
       return;
     }
     setState(() => _submitting = true);
-    final draft = ProductDraft(
-      name: _name.text.trim(),
-      sku: _sku.text.trim(),
-      barcode: _barcode.text.trim(),
-      description: _description.text.trim(),
-      categoryName: _category.text.trim().isEmpty
-          ? null
-          : _category.text.trim(),
-      sellingPriceMinor: moneyToMinor(_sellingPrice.text.trim()),
-      costPriceMinor: _costPrice.text.trim().isEmpty
-          ? 0
-          : moneyToMinor(_costPrice.text.trim()),
-      trackStock: _trackStock,
-      quantity: _trackStock
-          ? (double.tryParse(_openingStock.text.trim()) ?? 0)
-          : 0,
-      lowStockThreshold: _trackStock
-          ? (double.tryParse(_lowStock.text.trim()) ?? 0)
-          : 0,
-      unit: _unit == 'Other' ? _customUnit.text.trim() : _unit,
-      status: _status,
-      tracksExpiry: _tracksExpiry,
-      defaultExpiryReminderDays: _expiryReminderDays,
-      initialStockExpiryDate: _initialExpiryDate,
-      initialStockExpiryDateKnown: _tracksExpiry && _initialExpiryDateKnown,
-    );
-
     try {
+      final isOnline = ref.read(isOnlineProvider).asData?.value ?? true;
+      if (_selectedImage != null && isOnline) {
+        final uploaded = await ref
+            .read(pinataUploadServiceProvider)
+            .uploadProductImage(businessId: businessId, image: _selectedImage!);
+        _imageUrl = uploaded.logoUrl;
+        _imageCid = uploaded.cid;
+      }
+      final draft = ProductDraft(
+        name: _name.text.trim(),
+        sku: _sku.text.trim(),
+        barcode: _barcode.text.trim(),
+        description: _description.text.trim(),
+        categoryName: _category.text.trim().isEmpty
+            ? null
+            : _category.text.trim(),
+        imageUrl: _imageUrl,
+        imageCid: _imageCid,
+        sellingPriceMinor: moneyToMinor(_sellingPrice.text.trim()),
+        costPriceMinor: _costPrice.text.trim().isEmpty
+            ? 0
+            : moneyToMinor(_costPrice.text.trim()),
+        trackStock: _trackStock,
+        quantity: _trackStock
+            ? (double.tryParse(_openingStock.text.trim()) ?? 0)
+            : 0,
+        lowStockThreshold: _trackStock
+            ? (double.tryParse(_lowStock.text.trim()) ?? 0)
+            : 0,
+        unit: _unit == 'Other' ? _customUnit.text.trim() : _unit,
+        status: _status,
+        tracksExpiry: _tracksExpiry,
+        defaultExpiryReminderDays: _expiryReminderDays,
+        initialStockExpiryDate: _initialExpiryDate,
+        initialStockExpiryDateKnown: _tracksExpiry && _initialExpiryDateKnown,
+      );
       final repo = ref.read(productsRepositoryProvider);
+      late final String id;
       if (widget.mode == _ProductFormMode.create) {
-        final id = await repo.createProduct(
+        id = await repo.createProduct(
           businessId,
           draft,
           branchId: branchId,
-        );
-        if (!mounted) return;
-        context.goNamed(
-          AppRouteNames.productDetails,
-          pathParameters: <String, String>{'productId': id},
+          queueWhenOffline: !isOnline,
         );
       } else {
+        id = widget.productId!;
         await repo.updateProduct(
           businessId,
           widget.productId!,
           draft,
           branchId: branchId,
         );
-        if (!mounted) return;
+      }
+      if (_selectedImage != null && !isOnline) {
+        final localPath = await persistPendingImage(
+          id: 'product_$id',
+          image: _selectedImage!,
+        );
+        await ref
+            .read(offlineMutationQueueProvider)
+            .enqueue(
+              id: 'media_product_$id',
+              type: OfflineMutationType.mediaUpload,
+              businessId: businessId,
+              payload: <String, dynamic>{
+                'purpose': 'product_image',
+                'collection': 'products',
+                'recordId': id,
+                'localPath': localPath,
+                'fileName': _selectedImage!.fileName,
+                'mimeType': _selectedImage!.mimeType,
+                'width': _selectedImage!.width,
+                'height': _selectedImage!.height,
+              },
+            );
+      }
+      if (!mounted) return;
+      if (!isOnline) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product saved. Waiting to sync.')),
+        );
+      }
+      if (widget.mode == _ProductFormMode.create) {
+        if (isOnline) {
+          context.goNamed(
+            AppRouteNames.productDetails,
+            pathParameters: <String, String>{'productId': id},
+          );
+        } else {
+          context.pop();
+        }
+      } else {
         context.pop();
       }
     } on ProductException catch (error) {
@@ -640,6 +718,11 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.friendlyMessage)));
+    } on PinataUploadException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -650,6 +733,84 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _pickProductImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take product photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 92,
+        maxWidth: 1800,
+        maxHeight: 1800,
+      );
+      if (picked == null) return;
+      final prepared = await ImageCompressionService().prepareLogo(
+        sourceBytes: await picked.readAsBytes(),
+        fileName: picked.name,
+        mimeType: picked.mimeType,
+      );
+      if (mounted) setState(() => _selectedImage = prepared);
+    } on ImageCompressionException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+}
+
+class _ProductPhoto extends StatelessWidget {
+  const _ProductPhoto({this.bytes, this.url});
+
+  final Uint8List? bytes;
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    if (bytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(bytes!, width: 112, height: 112, fit: BoxFit.cover),
+      );
+    }
+    if ((url ?? '').trim().isNotEmpty) {
+      return AppNetworkImage(
+        url: url!,
+        width: 112,
+        height: 112,
+        borderRadius: BorderRadius.circular(12),
+        fallbackIcon: Icons.inventory_2_outlined,
+      );
+    }
+    return Container(
+      width: 112,
+      height: 112,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(Icons.inventory_2_outlined, size: 42),
+    );
   }
 }
 

@@ -10,6 +10,7 @@ import '../../../app/router.dart';
 import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/formatting/record_date_filter.dart';
 import '../../../core/sync/record_sync_status.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../core/services/image_compression_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -613,12 +614,19 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     try {
       final repo = ref.read(expensesRepositoryProvider);
       if (widget.expenseId == null) {
+        final isOnline = ref.read(isOnlineProvider).asData?.value ?? true;
         final id = await repo.createExpense(
           businessId,
           draft,
           branchId: branchId,
+          queueWhenOffline: !isOnline,
         );
         if (!mounted) return;
+        if (!isOnline) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Expense saved. Waiting to sync.')),
+          );
+        }
         context.goNamed(
           AppRouteNames.expenseDetails,
           pathParameters: {'expenseId': id},

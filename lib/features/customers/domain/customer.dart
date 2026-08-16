@@ -28,6 +28,8 @@ class Customer {
     this.email,
     this.address,
     this.notes,
+    this.photoUrl,
+    this.photoCid,
     this.usesWhatsApp = false,
     this.lastPurchaseAt,
     this.createdBy,
@@ -54,6 +56,8 @@ class Customer {
       email: data['email'] as String?,
       address: data['address'] as String?,
       notes: data['notes'] as String?,
+      photoUrl: data['photoUrl'] as String?,
+      photoCid: data['photoCid'] as String?,
       usesWhatsApp: data['usesWhatsApp'] as bool? ?? false,
       balanceMinor: balance is int ? balance : moneyToMinor(balance),
       totalSalesMinor:
@@ -78,6 +82,8 @@ class Customer {
   final String? email;
   final String? address;
   final String? notes;
+  final String? photoUrl;
+  final String? photoCid;
   final bool usesWhatsApp;
   final int balanceMinor;
   final int totalSalesMinor;

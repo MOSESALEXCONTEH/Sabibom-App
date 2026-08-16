@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../branches/application/current_branch_providers.dart';
+import '../../../core/sync/offline_mutation_queue.dart';
 import '../data/firestore_products_repository.dart';
 import '../data/products_repository.dart';
 import '../domain/inventory_movement.dart';
 import '../domain/product.dart';
 
 final productsRepositoryProvider = Provider<ProductsRepository>(
-  (ref) => FirestoreProductsRepository(),
+  (ref) => FirestoreProductsRepository(
+    offlineQueue: ref.watch(offlineMutationQueueProvider),
+  ),
 );
 
 final productsListProvider = StreamProvider.family<List<Product>, String>((
@@ -15,17 +20,157 @@ final productsListProvider = StreamProvider.family<List<Product>, String>((
   businessId,
 ) {
   final branchId = ref.watch(currentBranchReadScopeProvider);
-  return ref
+  final source = ref
       .watch(productsRepositoryProvider)
       .watchProducts(businessId, branchId: branchId);
+  final queue = ref.watch(offlineMutationQueueProvider);
+  late StreamController<List<Product>> controller;
+  StreamSubscription<List<Product>>? productsSubscription;
+  StreamSubscription<void>? queueSubscription;
+  var products = const <Product>[];
+
+  Future<void> emit() async {
+    final pending = await queue.pending(businessId: businessId);
+    final additions = pending
+        .where(
+          (item) =>
+              item.type == OfflineMutationType.productCreate &&
+              (branchId == null || item.payload['branchId'] == branchId),
+        )
+        .map((item) {
+          final data = <String, dynamic>{
+            ...item.payload,
+            'businessId': businessId,
+            'status': item.payload['status'] ?? 'active',
+          };
+          return Product.fromMap(item.payload['productId'] as String, data);
+        });
+    final merged = <String, Product>{
+      for (final product in products) product.id: product,
+    };
+    for (final product in additions) {
+      merged[product.id] = product;
+    }
+    final stockChanges = pendingPurchaseStockAdditions(
+      mutations: pending,
+      businessId: businessId,
+      branchId: branchId,
+    );
+    for (final mutation in pending.where(
+      (item) =>
+          item.type == OfflineMutationType.saleComplete &&
+          (branchId == null ||
+              (item.payload['summary'] as Map?)?['branchId'] == branchId),
+    )) {
+      final request = mutation.payload['request'] as Map?;
+      for (final raw
+          in (request?['items'] as List? ?? const <Object?>[])
+              .whereType<Map>()) {
+        final item = Map<String, dynamic>.from(raw);
+        final productId = item['productId'] as String?;
+        if (productId == null || item['trackStock'] != true) continue;
+        stockChanges.update(
+          productId,
+          (value) => value - ((item['quantity'] as num?)?.toDouble() ?? 0),
+          ifAbsent: () => -((item['quantity'] as num?)?.toDouble() ?? 0),
+        );
+      }
+    }
+    for (final entry in stockChanges.entries) {
+      final product = merged[entry.key];
+      if (product == null) continue;
+      merged[entry.key] = product.withStockSnapshot(
+        quantity: (product.quantity + entry.value).clamp(0, double.infinity),
+        lowStockThreshold: product.lowStockThreshold,
+        averageUnitCostMinor: product.costPriceMinor,
+        stockCostValueMinor: product.stockCostValueMinor,
+        expectedStockRevenueMinor: product.expectedStockRevenueMinor,
+        potentialProfitRemainingMinor: product.potentialProfitRemainingMinor,
+        realizedGrossProfitMinor: product.realizedGrossProfitMinor,
+        expiringQuantity: product.expiringQuantity,
+        expiredQuantity: product.expiredQuantity,
+        unknownExpiryQuantity: product.unknownExpiryQuantity,
+        expiryStatus: product.expiryStatus,
+        nextExpiryDate: product.nextExpiryDate,
+        nextExpiryBatchId: product.nextExpiryBatchId,
+        nextExpiryBatchQuantity: product.nextExpiryBatchQuantity,
+        profitIsEstimated: product.profitIsEstimated,
+      );
+    }
+    if (!controller.isClosed) {
+      final result = merged.values.toList()
+        ..sort((left, right) => left.name.compareTo(right.name));
+      controller.add(result);
+    }
+  }
+
+  controller = StreamController<List<Product>>(
+    onListen: () {
+      productsSubscription = source.listen((value) {
+        products = value;
+        unawaited(emit());
+      }, onError: controller.addError);
+      queueSubscription = queue.changes.listen((_) => unawaited(emit()));
+      unawaited(emit());
+    },
+    onCancel: () async {
+      await productsSubscription?.cancel();
+      await queueSubscription?.cancel();
+    },
+  );
+  return controller.stream;
 });
 
+Map<String, double> pendingPurchaseStockAdditions({
+  required Iterable<OfflineMutation> mutations,
+  required String businessId,
+  required String? branchId,
+}) {
+  final additions = <String, double>{};
+  for (final mutation in mutations.where(
+    (item) =>
+        item.businessId == businessId &&
+        item.type == OfflineMutationType.purchaseComplete &&
+        (branchId == null ||
+            (item.payload['summary'] as Map?)?['branchId'] == branchId),
+  )) {
+    final request = mutation.payload['request'] as Map?;
+    for (final raw
+        in (request?['items'] as List? ?? const <Object?>[]).whereType<Map>()) {
+      final item = Map<String, dynamic>.from(raw);
+      final productId = item['productId'] as String?;
+      if (productId == null || item['trackStock'] != true) continue;
+      additions.update(
+        productId,
+        (value) => value + ((item['quantity'] as num?)?.toDouble() ?? 0),
+        ifAbsent: () => (item['quantity'] as num?)?.toDouble() ?? 0,
+      );
+    }
+  }
+  return additions;
+}
+
 final productDetailProvider = FutureProvider.family<Product?, (String, String)>(
-  (ref, request) {
+  (ref, request) async {
     final branchId = ref.watch(currentBranchReadScopeProvider);
-    return ref
+    final product = await ref
         .watch(productsRepositoryProvider)
         .getProduct(request.$1, request.$2, branchId: branchId);
+    if (product != null) return product;
+    final pending = await ref
+        .watch(offlineMutationQueueProvider)
+        .pending(businessId: request.$1);
+    for (final item in pending) {
+      if (item.type == OfflineMutationType.productCreate &&
+          item.payload['productId'] == request.$2 &&
+          (branchId == null || item.payload['branchId'] == branchId)) {
+        return Product.fromMap(request.$2, <String, dynamic>{
+          ...item.payload,
+          'businessId': request.$1,
+        });
+      }
+    }
+    return null;
   },
 );
 

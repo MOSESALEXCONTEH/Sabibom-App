@@ -7,6 +7,7 @@ import '../../../app/router.dart';
 import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/sync/record_sync_status.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../inventory/application/inventory_providers.dart';
@@ -151,6 +152,16 @@ class _ProductDetailsBody extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
             children: <Widget>[
+              if ((product.imageUrl ?? '').trim().isNotEmpty) ...<Widget>[
+                AppNetworkImage(
+                  url: product.imageUrl!,
+                  width: double.infinity,
+                  height: 220,
+                  borderRadius: BorderRadius.circular(8),
+                  fallbackIcon: Icons.inventory_2_outlined,
+                ),
+                const SizedBox(height: 16),
+              ],
               Text(
                 product.name,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(

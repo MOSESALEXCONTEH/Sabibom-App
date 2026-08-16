@@ -8,6 +8,7 @@ import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/sync/record_sync_status.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../core/widgets/app_list_primitives.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
@@ -591,8 +592,18 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
         ref.invalidate(suppliersListProvider(businessId));
         if (mounted) context.pop();
       } else {
-        final id = await repo.createSupplier(businessId, _draft);
+        final isOnline = ref.read(isOnlineProvider).asData?.value ?? true;
+        final id = await repo.createSupplier(
+          businessId,
+          _draft,
+          queueWhenOffline: !isOnline,
+        );
         if (mounted) {
+          if (!isOnline) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Supplier saved. Waiting to sync.')),
+            );
+          }
           context.goNamed(
             AppRouteNames.supplierDetails,
             pathParameters: <String, String>{'supplierId': id},

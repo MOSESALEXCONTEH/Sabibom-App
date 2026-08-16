@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/services/connectivity_service.dart';
+import '../core/sync/offline_mutation_queue.dart';
 import '../core/theme/app_colors.dart';
 import '../core/widgets/app_status_views.dart';
 import '../features/billing/application/billing_providers.dart';
@@ -19,6 +22,14 @@ class AuthenticatedAppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isOnline = ref.watch(isOnlineProvider).asData?.value ?? true;
+    ref.listen(isOnlineProvider, (_, next) {
+      if (next.asData?.value == true) {
+        unawaited(ref.read(offlineMutationQueueProvider).syncPending());
+      }
+    });
+    if (isOnline) {
+      unawaited(ref.read(offlineMutationQueueProvider).syncPending());
+    }
     final access = ref.watch(currentBusinessAccessProvider).asData?.value;
     final accessBlocked = access != null && !access.allowed;
     final terminology = ref.watch(currentBusinessTerminologyProvider);

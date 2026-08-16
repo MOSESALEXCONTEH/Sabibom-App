@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/authenticated_api_client.dart';
+import '../../../core/sync/offline_mutation_queue.dart';
 import '../../branches/domain/business_branch.dart';
 import '../../sales/domain/sale_models.dart';
 import '../domain/purchase.dart';
@@ -25,6 +26,7 @@ class CompletePurchaseRequest {
     this.taxPercentage = 0,
     this.deliveryMinor = 0,
     this.paymentMethod,
+    this.queueWhenOffline = false,
   });
 
   final String purchaseId;
@@ -41,6 +43,7 @@ class CompletePurchaseRequest {
   final int deliveryMinor;
   final int amountPaidMinor;
   final String? paymentMethod;
+  final bool queueWhenOffline;
 }
 
 class CreatePurchaseReturnRequest {
@@ -84,13 +87,16 @@ class FirestorePurchasesRepository implements PurchasesRepository {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     AuthenticatedApiClient? apiClient,
+    OfflineMutationQueue? offlineQueue,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _auth = auth ?? FirebaseAuth.instance,
-       _apiClient = apiClient ?? AuthenticatedApiClient();
+       _apiClient = apiClient ?? AuthenticatedApiClient(),
+       _offlineQueue = offlineQueue ?? OfflineMutationQueue();
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
   final AuthenticatedApiClient _apiClient;
+  final OfflineMutationQueue _offlineQueue;
   final bool _useAuthoritativeInventoryApi = true;
 
   @override
@@ -159,26 +165,15 @@ class FirestorePurchasesRepository implements PurchasesRepository {
         message: 'Select a supplier and add at least one product.',
       );
     }
+    final apiBody = _purchaseRequestBody(request, writableBranchId);
+    if (request.queueWhenOffline) {
+      return _queuePurchase(request, writableBranchId, apiBody);
+    }
     if (_useAuthoritativeInventoryApi) {
       try {
         await _apiClient.postJson(
           '/api/inventory/purchases/complete',
-          body: <String, dynamic>{
-            'purchaseId': request.purchaseId,
-            'businessId': request.businessId,
-            'branchId': writableBranchId,
-            'branchNameSnapshot': request.branchNameSnapshot,
-            'branchCodeSnapshot': request.branchCodeSnapshot,
-            'supplierId': request.supplierId,
-            'supplierName': request.supplierName,
-            'items': request.items.map((item) => item.toMap()).toList(),
-            'orderDiscountType': request.orderDiscountType?.name,
-            'orderDiscountValue': request.orderDiscountValue,
-            'taxPercentage': request.taxPercentage,
-            'deliveryMinor': request.deliveryMinor,
-            'amountPaidMinor': request.amountPaidMinor,
-            'paymentMethod': request.paymentMethod,
-          },
+          body: apiBody,
           timeout: const Duration(seconds: 90),
         );
         final completed = await getPurchase(
@@ -197,6 +192,9 @@ class FirestorePurchasesRepository implements PurchasesRepository {
       } on ApiException catch (error) {
         // Inventory purchase route may not be deployed yet on Vercel (404).
         // Fall through to the Firestore completion path below.
+        if (error.statusCode == null) {
+          return _queuePurchase(request, writableBranchId, apiBody);
+        }
         if (error.statusCode != 404 && error.statusCode != 405) {
           throw PurchaseException(
             error.code ?? 'unavailable',
@@ -520,6 +518,77 @@ class FirestorePurchasesRepository implements PurchasesRepository {
     } on FirebaseException catch (error) {
       throw PurchaseException(error.code, message: error.message);
     }
+  }
+
+  Map<String, dynamic> _purchaseRequestBody(
+    CompletePurchaseRequest request,
+    String branchId,
+  ) => <String, dynamic>{
+    'purchaseId': request.purchaseId,
+    'businessId': request.businessId,
+    'branchId': branchId,
+    'branchNameSnapshot': request.branchNameSnapshot,
+    'branchCodeSnapshot': request.branchCodeSnapshot,
+    'supplierId': request.supplierId,
+    'supplierName': request.supplierName,
+    'items': request.items.map((item) => item.toMap()).toList(),
+    'orderDiscountType': request.orderDiscountType?.name,
+    'orderDiscountValue': request.orderDiscountValue,
+    'taxPercentage': request.taxPercentage,
+    'deliveryMinor': request.deliveryMinor,
+    'amountPaidMinor': request.amountPaidMinor,
+    'paymentMethod': request.paymentMethod,
+  };
+
+  Future<Purchase> _queuePurchase(
+    CompletePurchaseRequest request,
+    String branchId,
+    Map<String, dynamic> body,
+  ) async {
+    final totals = PurchaseCalculator.calculate(
+      items: request.items,
+      orderDiscountType: request.orderDiscountType,
+      orderDiscountValue: request.orderDiscountValue,
+      taxPercentage: request.taxPercentage,
+      deliveryMinor: request.deliveryMinor,
+      amountPaidMinor: request.amountPaidMinor,
+    );
+    final createdAt = DateTime.now().toUtc();
+    final purchaseNumber = 'Pending ${request.purchaseId.substring(0, 8)}';
+    final paymentStatus = totals.balanceDueMinor == 0
+        ? PurchasePaymentStatus.paid
+        : totals.amountPaidMinor == 0
+        ? PurchasePaymentStatus.unpaid
+        : PurchasePaymentStatus.partiallyPaid;
+    final summary = <String, dynamic>{
+      'purchaseId': request.purchaseId,
+      'businessId': request.businessId,
+      'branchId': branchId,
+      'branchNameSnapshot': request.branchNameSnapshot,
+      'branchCodeSnapshot': request.branchCodeSnapshot,
+      'purchaseNumber': purchaseNumber,
+      'supplierId': request.supplierId,
+      'supplierName': request.supplierName,
+      'items': body['items'],
+      'subtotalMinor': totals.subtotalMinor,
+      'discountMinor': totals.itemDiscountMinor + totals.orderDiscountMinor,
+      'taxMinor': totals.taxMinor,
+      'deliveryMinor': totals.deliveryMinor,
+      'totalMinor': totals.totalMinor,
+      'amountPaidMinor': totals.amountPaidMinor,
+      'balanceDueMinor': totals.balanceDueMinor,
+      'paymentMethod': request.paymentMethod,
+      'paymentStatus': paymentStatus.name,
+      'status': PurchaseStatus.completed.name,
+      'createdAt': createdAt.toIso8601String(),
+    };
+    await _offlineQueue.enqueue(
+      id: 'purchase_${request.purchaseId}',
+      type: OfflineMutationType.purchaseComplete,
+      businessId: request.businessId,
+      payload: <String, dynamic>{'request': body, 'summary': summary},
+    );
+    return Purchase.fromMap(request.purchaseId, summary);
   }
 
   @override

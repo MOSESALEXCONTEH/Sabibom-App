@@ -12,6 +12,7 @@ class CompleteSaleRequest {
     required this.branchId,
     required this.branchNameSnapshot,
     required this.branchCodeSnapshot,
+    this.queueWhenOffline = false,
   });
 
   final Business business;
@@ -21,6 +22,7 @@ class CompleteSaleRequest {
   final String branchId;
   final String branchNameSnapshot;
   final String branchCodeSnapshot;
+  final bool queueWhenOffline;
 }
 
 class CompletedSale {
@@ -36,6 +38,7 @@ class CompletedSale {
     required this.balanceDueMinor,
     required this.changeMinor,
     required this.paymentMethod,
+    this.isPendingSync = false,
   });
 
   final String saleId;
@@ -49,6 +52,7 @@ class CompletedSale {
   final int balanceDueMinor;
   final int changeMinor;
   final PaymentMethod paymentMethod;
+  final bool isPendingSync;
 }
 
 class SaleHistoryItem {

@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_list_primitives.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../../core/widgets/app_summary_strip.dart';
@@ -337,9 +338,16 @@ class _CustomersBody extends ConsumerWidget {
                                     'customerId': customer.id,
                                   },
                                 ),
-                                leading: AppListAvatar(
-                                  label: customer.initials,
-                                ),
+                                leading:
+                                    (customer.photoUrl ?? '').trim().isNotEmpty
+                                    ? AppNetworkImage(
+                                        url: customer.photoUrl!,
+                                        width: 40,
+                                        height: 40,
+                                        borderRadius: BorderRadius.circular(20),
+                                        fallbackIcon: Icons.person_outline,
+                                      )
+                                    : AppListAvatar(label: customer.initials),
                                 title: customer.name,
                                 subtitle: [
                                   if (customer.phone?.isNotEmpty == true)

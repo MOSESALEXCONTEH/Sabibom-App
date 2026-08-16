@@ -9,6 +9,8 @@ class CustomerDraft {
     this.email,
     this.address,
     this.notes,
+    this.photoUrl,
+    this.photoCid,
     this.usesWhatsApp = false,
   });
 
@@ -17,6 +19,8 @@ class CustomerDraft {
   final String? email;
   final String? address;
   final String? notes;
+  final String? photoUrl;
+  final String? photoCid;
   final bool usesWhatsApp;
 }
 
@@ -44,13 +48,22 @@ class DuplicateCustomerException implements Exception {
 
 abstract interface class CustomersRepository {
   Stream<List<Customer>> watchCustomers(String businessId, {String? branchId});
-  Future<Customer?> getCustomer(String businessId, String customerId, {String? branchId});
-  Future<Customer?> findByNormalizedPhone(String businessId, String phone, {String? branchId});
+  Future<Customer?> getCustomer(
+    String businessId,
+    String customerId, {
+    String? branchId,
+  });
+  Future<Customer?> findByNormalizedPhone(
+    String businessId,
+    String phone, {
+    String? branchId,
+  });
   Future<String> createCustomer(
     String businessId,
     CustomerDraft draft, {
     bool allowDuplicatePhone = false,
     String? branchId,
+    bool queueWhenOffline = false,
   });
   Future<void> updateCustomer(
     String businessId,

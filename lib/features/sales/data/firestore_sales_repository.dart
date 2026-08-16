@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/authenticated_api_client.dart';
+import '../../../core/sync/offline_mutation_queue.dart';
 import '../../branches/domain/business_branch.dart';
 import '../../notifications/application/operational_alert_service.dart';
 import '../../notifications/application/stock_alert_service.dart';
@@ -21,13 +22,16 @@ class FirestoreSalesRepository implements SalesRepository {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     AuthenticatedApiClient? apiClient,
+    OfflineMutationQueue? offlineQueue,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _auth = auth ?? FirebaseAuth.instance,
-       _apiClient = apiClient ?? AuthenticatedApiClient();
+       _apiClient = apiClient ?? AuthenticatedApiClient(),
+       _offlineQueue = offlineQueue ?? OfflineMutationQueue();
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
   final AuthenticatedApiClient _apiClient;
+  final OfflineMutationQueue _offlineQueue;
   final bool _useAuthoritativeInventoryApi = true;
 
   @override
@@ -66,50 +70,17 @@ class FirestoreSalesRepository implements SalesRepository {
       );
     }
 
+    final apiBody = _saleRequestBody(request, totals);
+    if (request.queueWhenOffline) {
+      return _queueSale(request, totals, apiBody);
+    }
+
     if (_useAuthoritativeInventoryApi) {
       try {
         final response = await _apiClient.postJson(
           '/api/inventory/sales/complete',
-          body: <String, dynamic>{
-            'saleId': request.saleId,
-            'businessId': request.business.businessId,
-            'branchId': request.branchId,
-            'branchNameSnapshot': request.branchNameSnapshot,
-            'branchCodeSnapshot': request.branchCodeSnapshot,
-            'items': request.cart.items
-                .map(
-                  (item) => <String, dynamic>{
-                    'saleItemId': item.saleItemId,
-                    'productId': item.productId,
-                    'isCustomItem': item.isCustomItem,
-                    'name': item.name,
-                    'sku': item.sku,
-                    'barcode': item.barcode,
-                    'unit': item.unit,
-                    'quantity': item.quantity,
-                    'quantityInput': item.quantityInput,
-                    'unitPriceMinor': item.unitPriceMinor,
-                    'unitPriceInput': item.unitPriceInput,
-                    'costPriceMinor': item.costPriceMinor,
-                    'trackStock': item.trackStock,
-                    'discountType': item.discountType?.name,
-                    'discountValue': item.discountValue,
-                  },
-                )
-                .toList(),
-            'paymentMethod': request.cart.paymentMethod.storedValue,
-            'amountPaidMinor': totals.amountPaidMinor,
-            'customerId': request.cart.customer?.customerId,
-            'customerName': request.cart.customer?.name,
-            'customerPhone': request.cart.customer?.phone,
-            'orderDiscountType': request.cart.orderDiscountType?.name,
-            'orderDiscountValue': request.cart.orderDiscountValue,
-            'taxEnabled': request.business.taxEnabled,
-            'taxPercentage': request.business.taxPercentage,
-            'note': request.cart.note.isEmpty ? null : request.cart.note,
-            'cashierName': request.cashierName,
-          },
-          timeout: const Duration(seconds: 90),
+          body: apiBody,
+          timeout: const Duration(seconds: 20),
         );
         await _evaluatePostSaleAlerts(request, totals);
         return CompletedSale(
@@ -140,6 +111,9 @@ class FirestoreSalesRepository implements SalesRepository {
         // Inventory complete route may not be deployed yet on Vercel (404).
         // Fall through to the Firestore completion path below.
         if (error.statusCode != 404 && error.statusCode != 405) {
+          if (error.statusCode == null) {
+            return _queueSale(request, totals, apiBody);
+          }
           throw SaleException(
             error.code ?? 'unavailable',
             message: error.message,
@@ -200,6 +174,107 @@ class FirestoreSalesRepository implements SalesRepository {
     } on FirebaseException catch (error) {
       throw SaleException(error.code, message: error.message);
     }
+  }
+
+  Map<String, dynamic> _saleRequestBody(
+    CompleteSaleRequest request,
+    SaleTotals totals,
+  ) => <String, dynamic>{
+    'saleId': request.saleId,
+    'businessId': request.business.businessId,
+    'branchId': request.branchId,
+    'branchNameSnapshot': request.branchNameSnapshot,
+    'branchCodeSnapshot': request.branchCodeSnapshot,
+    'items': request.cart.items
+        .map(
+          (item) => <String, dynamic>{
+            'saleItemId': item.saleItemId,
+            'productId': item.productId,
+            'isCustomItem': item.isCustomItem,
+            'name': item.name,
+            'sku': item.sku,
+            'barcode': item.barcode,
+            'unit': item.unit,
+            'quantity': item.quantity,
+            'quantityInput': item.quantityInput,
+            'unitPriceMinor': item.unitPriceMinor,
+            'unitPriceInput': item.unitPriceInput,
+            'costPriceMinor': item.costPriceMinor,
+            'trackStock': item.trackStock,
+            'discountType': item.discountType?.name,
+            'discountValue': item.discountValue,
+          },
+        )
+        .toList(),
+    'paymentMethod': request.cart.paymentMethod.storedValue,
+    'amountPaidMinor': totals.amountPaidMinor,
+    'customerId': request.cart.customer?.customerId,
+    'customerName': request.cart.customer?.name,
+    'customerPhone': request.cart.customer?.phone,
+    'orderDiscountType': request.cart.orderDiscountType?.name,
+    'orderDiscountValue': request.cart.orderDiscountValue,
+    'taxEnabled': request.business.taxEnabled,
+    'taxPercentage': request.business.taxPercentage,
+    'note': request.cart.note.isEmpty ? null : request.cart.note,
+    'cashierName': request.cashierName,
+  };
+
+  Future<CompletedSale> _queueSale(
+    CompleteSaleRequest request,
+    SaleTotals totals,
+    Map<String, dynamic> body,
+  ) async {
+    await _offlineQueue.enqueue(
+      id: 'sale_${request.saleId}',
+      type: OfflineMutationType.saleComplete,
+      businessId: request.business.businessId,
+      payload: <String, dynamic>{
+        'request': body,
+        'summary': <String, dynamic>{
+          'saleId': request.saleId,
+          'businessId': request.business.businessId,
+          'branchId': request.branchId,
+          'branchNameSnapshot': request.branchNameSnapshot,
+          'branchCodeSnapshot': request.branchCodeSnapshot,
+          'receiptNumber': 'Pending ${request.saleId.substring(0, 8)}',
+          'customerId': request.cart.customer?.customerId,
+          'customerName': request.cart.customer?.name ?? 'Walk-in Customer',
+          'customerPhone': request.cart.customer?.phone,
+          'items': body['items'],
+          'subtotalMinor': totals.subtotalMinor,
+          'discountMinor': totals.itemDiscountMinor + totals.orderDiscountMinor,
+          'taxMinor': totals.taxMinor,
+          'totalMinor': totals.totalMinor,
+          'amountPaidMinor': totals.amountPaidMinor,
+          'balanceDueMinor': totals.balanceDueMinor,
+          'changeMinor': totals.changeMinor,
+          'currencyCode': request.business.currency.code,
+          'currencySymbol': request.business.currency.symbol,
+          'paymentMethod': request.cart.paymentMethod.storedValue,
+          'paymentStatus': totals.balanceDueMinor == 0
+              ? PaymentStatus.paid.name
+              : PaymentStatus.partiallyPaid.name,
+          'saleStatus': SaleStatus.completed.name,
+          'note': body['note'],
+          'createdByName': request.cashierName,
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+        },
+      },
+    );
+    return CompletedSale(
+      saleId: request.saleId,
+      businessId: request.business.businessId,
+      branchId: request.branchId,
+      branchNameSnapshot: request.branchNameSnapshot,
+      branchCodeSnapshot: request.branchCodeSnapshot,
+      receiptNumber: 'Pending ${request.saleId.substring(0, 8)}',
+      totalMinor: totals.totalMinor,
+      amountPaidMinor: totals.amountPaidMinor,
+      balanceDueMinor: totals.balanceDueMinor,
+      changeMinor: totals.changeMinor,
+      paymentMethod: request.cart.paymentMethod,
+      isPendingSync: true,
+    );
   }
 
   Future<CompletedSale> _runCompleteSaleTransaction({
