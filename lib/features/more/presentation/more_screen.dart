@@ -13,6 +13,7 @@ import '../../dashboard/application/dashboard_providers.dart';
 import '../../business_setup/application/business_experience_providers.dart';
 import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
+import '../../billing/presentation/free_plan_banner_ad.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -149,6 +150,11 @@ class MoreScreen extends ConsumerWidget {
 
     final reportsItems = <_MoreItem>[
       _MoreItem(
+        Icons.monitor_heart_outlined,
+        'Business Health AI Score',
+        () => context.pushNamed(AppRouteNames.businessHealth),
+      ),
+      _MoreItem(
         Icons.bar_chart_outlined,
         'Business Reports',
         () => context.pushNamed(AppRouteNames.reports),
@@ -272,6 +278,8 @@ class MoreScreen extends ConsumerWidget {
             label: const Text('Sign Out'),
             onPressed: () => _confirmSignOut(context, ref),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          const FreePlanBannerAd(),
         ],
       ),
     );

@@ -6,6 +6,7 @@ import '../../branches/application/current_branch_providers.dart';
 import '../../expenses/application/expenses_providers.dart';
 import '../../expenses/domain/expense.dart';
 import '../../expenses/domain/expense_category.dart';
+import '../../dashboard/application/dashboard_providers.dart';
 import '../../products/application/products_providers.dart';
 import '../../products/data/products_repository.dart';
 import '../../products/domain/product.dart';
@@ -650,7 +651,11 @@ class SabiAssistantController extends Notifier<SabiAssistantState> {
           ),
           branchId: branchId,
         );
-    return 'Done! I recorded an expense of Le '
+    final activeBusiness = ref.read(activeBusinessProvider).asData?.value;
+    final currencySymbol = activeBusiness is ActiveBusinessData
+        ? activeBusiness.business.currency.symbol
+        : null;
+    return 'Done! I recorded an expense of ${currencySymbol ?? 'Le'} '
         '${(amountMinor / 100).toStringAsFixed(2)} for $description '
         '(${category.name}).';
   }

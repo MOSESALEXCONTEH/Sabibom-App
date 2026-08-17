@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../auth/application/user_profile_provider.dart';
 
 /// Manage product categories used when adding and filtering stock.
@@ -27,8 +28,11 @@ class _CategoriesSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final businessId =
-        ref.watch(currentUserProfileProvider).asData?.value?.activeBusinessId;
+    final businessId = ref
+        .watch(currentUserProfileProvider)
+        .asData
+        ?.value
+        ?.activeBusinessId;
     if (businessId == null || businessId.isEmpty) {
       return const Scaffold(
         body: Center(child: Text('No business has been set up yet.')),
@@ -64,7 +68,7 @@ class _CategoriesSettingsScreenState
                 ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
               return ListView(
-                padding: const EdgeInsets.all(AppSpacing.md),
+                padding: appSafeScrollPadding(context),
                 children: <Widget>[
                   Text(
                     'Categories help you organize products on the Products tab '
@@ -150,13 +154,13 @@ class _CategoriesSettingsScreenState
     setState(() => _saving = true);
     try {
       final next = [...current, name]..sort();
-      await FirebaseFirestore.instance.collection('businesses').doc(businessId).set(
-        <String, Object?>{
-          'productCategories': next,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .set(<String, Object?>{
+            'productCategories': next,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       _controller.clear();
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -171,13 +175,13 @@ class _CategoriesSettingsScreenState
     setState(() => _saving = true);
     try {
       final next = current.where((c) => c != name).toList(growable: false);
-      await FirebaseFirestore.instance.collection('businesses').doc(businessId).set(
-        <String, Object?>{
-          'productCategories': next,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .set(<String, Object?>{
+            'productCategories': next,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

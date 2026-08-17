@@ -13,6 +13,7 @@ import '../../../core/services/connectivity_service.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_list_primitives.dart';
 import '../../../core/widgets/app_network_image.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../../core/widgets/list_bulk_actions.dart';
@@ -146,7 +147,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
             );
           }
           return ListView.separated(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             itemCount: filteredItems.length,
             separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
             itemBuilder: (context, index) {
@@ -693,7 +694,7 @@ class PurchaseDetailsScreen extends ConsumerWidget {
             return const Center(child: Text('Purchase not found.'));
           }
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: appSafeScrollPadding(context),
             children: <Widget>[
               Text(
                 value.purchaseNumber,
@@ -843,7 +844,7 @@ class _PurchaseReturnScreenState extends ConsumerState<PurchaseReturnScreen> {
             return const Center(child: Text('Purchase not found.'));
           }
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: appSafeScrollPadding(context),
             children: value.items.map((item) {
               final controller = _controllers.putIfAbsent(
                 item.purchaseItemId,

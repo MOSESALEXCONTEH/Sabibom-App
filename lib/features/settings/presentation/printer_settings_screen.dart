@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../auth/application/user_profile_provider.dart';
 
 /// Printer and receipt output preferences for this device and business.
@@ -41,15 +42,18 @@ class _PrinterSettingsScreenState extends ConsumerState<PrinterSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final businessId =
-        ref.watch(currentUserProfileProvider).asData?.value?.activeBusinessId;
+    final businessId = ref
+        .watch(currentUserProfileProvider)
+        .asData
+        ?.value
+        ?.activeBusinessId;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Printer Settings')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: appSafeScrollPadding(context),
               children: <Widget>[
                 Text(
                   'Choose how receipts are prepared for thermal printers and '
@@ -63,9 +67,18 @@ class _PrinterSettingsScreenState extends ConsumerState<PrinterSettingsScreen> {
                     labelText: 'Receipt paper width',
                   ),
                   items: const <DropdownMenuItem<String>>[
-                    DropdownMenuItem(value: '58mm', child: Text('58 mm (compact)')),
-                    DropdownMenuItem(value: '80mm', child: Text('80 mm (standard)')),
-                    DropdownMenuItem(value: 'A4', child: Text('A4 / PDF share')),
+                    DropdownMenuItem(
+                      value: '58mm',
+                      child: Text('58 mm (compact)'),
+                    ),
+                    DropdownMenuItem(
+                      value: '80mm',
+                      child: Text('80 mm (standard)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'A4',
+                      child: Text('A4 / PDF share'),
+                    ),
                   ],
                   onChanged: (value) {
                     if (value == null) return;
@@ -93,9 +106,7 @@ class _PrinterSettingsScreenState extends ConsumerState<PrinterSettingsScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 FilledButton(
-                  onPressed: _saving
-                      ? null
-                      : () => _save(businessId),
+                  onPressed: _saving ? null : () => _save(businessId),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
                   ),

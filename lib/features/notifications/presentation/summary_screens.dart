@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
@@ -13,33 +14,37 @@ import '../domain/business_summaries.dart';
 
 final dailySummaryProvider =
     FutureProvider.family<DailyBusinessSummary?, String>((ref, dateKey) async {
-  final active = ref.watch(activeBusinessProvider).asData?.value;
-  if (active is! ActiveBusinessData) return null;
-  final businessId = active.business.businessId;
-  final existing =
-      await BusinessSummaryService().getDaily(businessId, dateKey);
-  if (existing != null) return existing;
-  return BusinessSummaryService().generateDaily(
-    businessId: businessId,
-    day: DateTime.tryParse(dateKey) ?? DateTime.now(),
-    notify: false,
-  );
-});
+      final active = ref.watch(activeBusinessProvider).asData?.value;
+      if (active is! ActiveBusinessData) return null;
+      final businessId = active.business.businessId;
+      final existing = await BusinessSummaryService().getDaily(
+        businessId,
+        dateKey,
+      );
+      if (existing != null) return existing;
+      return BusinessSummaryService().generateDaily(
+        businessId: businessId,
+        day: DateTime.tryParse(dateKey) ?? DateTime.now(),
+        notify: false,
+      );
+    });
 
 final weeklySummaryProvider =
     FutureProvider.family<WeeklyBusinessSummary?, String>((ref, weekKey) async {
-  final active = ref.watch(activeBusinessProvider).asData?.value;
-  if (active is! ActiveBusinessData) return null;
-  final businessId = active.business.businessId;
-  final existing =
-      await BusinessSummaryService().getWeekly(businessId, weekKey);
-  if (existing != null) return existing;
-  return BusinessSummaryService().generateWeekly(
-    businessId: businessId,
-    weekKey: weekKey,
-    notify: false,
-  );
-});
+      final active = ref.watch(activeBusinessProvider).asData?.value;
+      if (active is! ActiveBusinessData) return null;
+      final businessId = active.business.businessId;
+      final existing = await BusinessSummaryService().getWeekly(
+        businessId,
+        weekKey,
+      );
+      if (existing != null) return existing;
+      return BusinessSummaryService().generateWeekly(
+        businessId: businessId,
+        weekKey: weekKey,
+        notify: false,
+      );
+    });
 
 class DailySummaryScreen extends ConsumerWidget {
   const DailySummaryScreen({required this.dateKey, super.key});
@@ -48,14 +53,17 @@ class DailySummaryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final canView = ref.watch(hasPermissionProvider(AppPermission.viewDailySummary)) ||
+    final canView =
+        ref.watch(hasPermissionProvider(AppPermission.viewDailySummary)) ||
         ref.watch(hasPermissionProvider(AppPermission.viewSalesReports));
     if (!canView) {
       return const AccessDeniedScreen(
         message: 'You do not have permission to view this alert.',
       );
     }
-    final canProfit = ref.watch(hasPermissionProvider(AppPermission.viewProfit));
+    final canProfit = ref.watch(
+      hasPermissionProvider(AppPermission.viewProfit),
+    );
     final async = ref.watch(dailySummaryProvider(dateKey));
 
     return Scaffold(
@@ -91,13 +99,13 @@ class DailySummaryScreen extends ConsumerWidget {
           }
           String money(int minor) => formatCurrency(minor / 100);
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: [
               Text(
                 'Business date $dateKey',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               if (summary.generatedAt != null)
                 Text(
@@ -127,8 +135,14 @@ class DailySummaryScreen extends ConsumerWidget {
                   money(summary.netProfitMinor),
                 ),
               ],
-              _row('Customer outstanding', money(summary.customerOutstandingMinor)),
-              _row('Supplier outstanding', money(summary.supplierOutstandingMinor)),
+              _row(
+                'Customer outstanding',
+                money(summary.customerOutstandingMinor),
+              ),
+              _row(
+                'Supplier outstanding',
+                money(summary.supplierOutstandingMinor),
+              ),
               _row('Low stock', '${summary.lowStockCount}'),
               _row('Out of stock', '${summary.outOfStockCount}'),
               if (summary.importantEvents.isNotEmpty) ...[
@@ -137,12 +151,14 @@ class DailySummaryScreen extends ConsumerWidget {
                   'Important events',
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
-                ...summary.importantEvents.map((e) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      leading: const Icon(Icons.circle, size: 8),
-                      title: Text(e),
-                    )),
+                ...summary.importantEvents.map(
+                  (e) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: const Icon(Icons.circle, size: 8),
+                    title: Text(e),
+                  ),
+                ),
               ],
             ],
           );
@@ -171,14 +187,17 @@ class WeeklyReportScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final canView = ref.watch(hasPermissionProvider(AppPermission.viewWeeklyReport)) ||
+    final canView =
+        ref.watch(hasPermissionProvider(AppPermission.viewWeeklyReport)) ||
         ref.watch(hasPermissionProvider(AppPermission.viewSalesReports));
     if (!canView) {
       return const AccessDeniedScreen(
         message: 'You do not have permission to view this alert.',
       );
     }
-    final canProfit = ref.watch(hasPermissionProvider(AppPermission.viewProfit));
+    final canProfit = ref.watch(
+      hasPermissionProvider(AppPermission.viewProfit),
+    );
     final async = ref.watch(weeklySummaryProvider(weekKey));
     final range = BusinessSummaryService.weekRangeFor(weekKey);
     final periodLabel =
@@ -217,13 +236,13 @@ class WeeklyReportScreen extends ConsumerWidget {
           }
           String money(int minor) => formatCurrency(minor / 100);
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: [
               Text(
                 'Week $weekKey',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               Text(periodLabel, style: Theme.of(context).textTheme.bodySmall),
               if (summary.generatedAt != null)
@@ -270,26 +289,27 @@ class WeeklyReportScreen extends ConsumerWidget {
                 'End of Day completed',
                 '${summary.endOfDayCompletedCount}',
               ),
-              _metric(
-                'End of Day missing',
-                '${summary.endOfDayMissingCount}',
-              ),
+              _metric('End of Day missing', '${summary.endOfDayMissingCount}'),
               if (summary.cashShortageMinor > 0)
-                _metric('Cash shortage total', money(summary.cashShortageMinor)),
+                _metric(
+                  'Cash shortage total',
+                  money(summary.cashShortageMinor),
+                ),
               if (summary.cashSurplusMinor > 0)
                 _metric('Cash surplus total', money(summary.cashSurplusMinor)),
               if (summary.topProducts.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   'Top products',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 ...summary.topProducts.map((p) {
                   final name = '${p['name'] ?? 'Item'}';
-                  final amount =
-                      money((p['amountMinor'] as num?)?.toInt() ?? 0);
+                  final amount = money(
+                    (p['amountMinor'] as num?)?.toInt() ?? 0,
+                  );
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
@@ -305,9 +325,9 @@ class WeeklyReportScreen extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   'Low stock',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 ...summary.lowStockProducts.map(
                   (p) => ListTile(
@@ -322,9 +342,9 @@ class WeeklyReportScreen extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   'Out of stock',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 ...summary.outOfStockProducts.map(
                   (p) => ListTile(
@@ -346,7 +366,10 @@ class WeeklyReportScreen extends ConsumerWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(label),
-      trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      trailing: Text(
+        value,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
     );
   }
 }

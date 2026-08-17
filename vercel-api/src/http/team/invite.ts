@@ -11,6 +11,10 @@ import {
 import {errors} from "../../utils/api-errors";
 import {sendSuccess} from "../../utils/api-response";
 import {createHandler, readJsonBody} from "../../utils/handler";
+import {
+  enforceBusinessCapacity,
+  ENTITLEMENT_KEYS,
+} from "../../services/billing/entitlements";
 
 const inviteSchema = z.object({
   businessId: businessIdSchema,
@@ -63,6 +67,24 @@ export default createHandler(["POST"], async (req: VercelRequest, res: VercelRes
   }
 
   const db = adminFirestore();
+  const [members, pendingInvitations] = await Promise.all([
+    db.collection("businesses").doc(data.businessId).collection("members")
+      .where("status", "==", "active").get(),
+    db.collection("businesses").doc(data.businessId).collection("staff_invitations")
+      .where("status", "==", "pending").get(),
+  ]);
+  const activeStaff = members.docs.filter((doc) => {
+    const member = doc.data();
+    return member.isOwner !== true && member.role !== "owner" && member.roleId !== "owner";
+  }).length;
+  await enforceBusinessCapacity({
+    db,
+    businessId: data.businessId,
+    entitlement: ENTITLEMENT_KEYS.staffMax,
+    currentUsage: activeStaff + pendingInvitations.size,
+    featureName: "staff accounts",
+  });
+
   const biz = await db.collection("businesses").doc(data.businessId).get();
   const businessName = (biz.data()?.name as string | undefined) ?? "Business";
   const ref = db
@@ -97,6 +119,33 @@ export default createHandler(["POST"], async (req: VercelRequest, res: VercelRes
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
+
+  // Invitation delivery is best-effort; the invitation remains valid if the
+  // invitee has no account yet or notification delivery is unavailable.
+  if (data.email) {
+    try {
+      const users = await db.collection("users")
+        .where("email", "==", data.email.toLowerCase()).limit(1).get();
+      if (!users.empty) {
+        await users.docs[0].ref.collection("notifications").doc().set({
+          type: "invitation_received",
+          title: "Team invitation",
+          body: `You were invited to join ${businessName} as ${data.roleName}.`,
+          read: false,
+          businessId: data.businessId,
+          entityType: "invitation",
+          entityId: ref.id,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      console.warn("[sabibom-api] invitation notification failed", {
+        businessId: data.businessId,
+        invitationId: ref.id,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  }
 
   sendSuccess(res, {
     invitationId: ref.id,

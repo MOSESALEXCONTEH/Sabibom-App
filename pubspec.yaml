@@ -58,6 +58,8 @@ dependencies:
   firebase_analytics: ^12.4.5
   firebase_performance: ^0.11.4+5
   mobile_scanner: ^7.4.0
+  in_app_purchase: ^3.3.0
+  google_mobile_ads: ^9.1.0
 
 dependency_overrides:
   # Avoids the objective_c native-assets hook, which is incompatible with a

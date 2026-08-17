@@ -136,6 +136,7 @@ class BusinessSetupController extends Notifier<BusinessSetupState> {
 
   void setFinancialSettings({
     CurrencyConfig? currency,
+    String? timezone,
     bool? taxEnabled,
     double? taxPercentage,
     String? financialYearStartMonth,
@@ -147,6 +148,7 @@ class BusinessSetupController extends Notifier<BusinessSetupState> {
     state = state.copyWith(
       data: state.data.copyWith(
         currency: currency,
+        timezone: timezone,
         taxEnabled: normalizedTaxEnabled,
         taxPercentage: normalizedTax.toDouble(),
         financialYearStartMonth: financialYearStartMonth,
@@ -220,11 +222,11 @@ class BusinessSetupController extends Notifier<BusinessSetupState> {
       if (data.address.trim().isEmpty) {
         return 'Enter your business address.';
       }
-      if (data.district.isEmpty) {
-        return 'Select a district.';
+      if (data.effectiveDistrict.isEmpty) {
+        return 'Enter your state, province, district, or region.';
       }
-      if (data.district == 'Other' && data.customDistrict.trim().isEmpty) {
-        return 'Enter your district or area.';
+      if (data.country.trim().isEmpty) {
+        return 'Enter your country.';
       }
       if (data.email.trim().isNotEmpty && !_isValidEmail(data.email.trim())) {
         return 'Enter a valid email address.';

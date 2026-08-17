@@ -47,25 +47,21 @@ class InventoryValuationReport {
     final tracked = products
         .where((p) => p.trackStock && p.status == ProductStatus.active)
         .toList();
-    final rows =
-        tracked
-            .map((product) {
-              final qty = product.quantity;
-              final value = (qty * product.costPriceMinor).round();
-              return InventoryValuationRow(
-                productId: product.id,
-                name: product.name,
-                sku: product.sku ?? '',
-                quantity: qty,
-                unitCostMinor: product.costPriceMinor,
-                lineValueMinor: value,
-                isLowStock: product.isLowStock,
-                isOutOfStock: product.isOutOfStock,
-                categoryName: product.categoryName,
-              );
-            })
-            .toList()
-          ..sort((a, b) => b.lineValueMinor.compareTo(a.lineValueMinor));
+    final rows = tracked.map((product) {
+      final qty = product.quantity;
+      final value = (qty * product.costPriceMinor).round();
+      return InventoryValuationRow(
+        productId: product.id,
+        name: product.name,
+        sku: product.sku ?? '',
+        quantity: qty,
+        unitCostMinor: product.costPriceMinor,
+        lineValueMinor: value,
+        isLowStock: product.isLowStock,
+        isOutOfStock: product.isOutOfStock,
+        categoryName: product.categoryName,
+      );
+    }).toList()..sort((a, b) => b.lineValueMinor.compareTo(a.lineValueMinor));
 
     final lowStock = rows.where((r) => r.isLowStock || r.isOutOfStock);
     return InventoryValuationReport(

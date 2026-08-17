@@ -15,6 +15,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_list_primitives.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../business_setup/domain/business.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../sales/domain/sale_models.dart';
@@ -26,6 +27,9 @@ import '../services/csv_export_service.dart';
 import '../services/report_pdf_service.dart';
 import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
+import '../../billing/domain/billing_entitlements.dart';
+import '../../billing/presentation/billing_gate.dart';
+import '../../billing/presentation/free_plan_banner_ad.dart';
 
 class ReportsScreen extends ConsumerWidget {
   const ReportsScreen({super.key});
@@ -42,7 +46,7 @@ class ReportsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Business Reports')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: appSafeScrollPadding(context),
         children: [
           const AppSectionHeader('Insights'),
           AppSectionCard(
@@ -150,6 +154,8 @@ class ReportsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.lg),
+          const FreePlanBannerAd(),
         ],
       ),
     );
@@ -229,7 +235,7 @@ class _ProfitLossReportScreenState
           onRetry: () => ref.invalidate(profitReportProvider(request)),
         ),
         data: (data) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: appSafeScrollPadding(context),
           children: [
             Wrap(
               spacing: AppSpacing.sm,
@@ -293,6 +299,14 @@ class _ProfitLossReportScreenState
     ({DateTime start, DateTime end}) range,
     ReportPeriodData data,
   ) async {
+    if (!await requireEntitlement(
+      context,
+      ref,
+      key: BillingEntitlementKeys.reportsExport,
+      featureName: 'Report export',
+    )) {
+      return;
+    }
     setState(() => _exporting = true);
     try {
       final bytes = await ReportPdfService().buildProfitLossPdf(
@@ -318,6 +332,14 @@ class _ProfitLossReportScreenState
   }
 
   Future<void> _exportCsv(ReportPeriodData data) async {
+    if (!await requireEntitlement(
+      context,
+      ref,
+      key: BillingEntitlementKeys.reportsExport,
+      featureName: 'Report export',
+    )) {
+      return;
+    }
     setState(() => _exporting = true);
     try {
       final csv = const CsvExportService().salesCsv(data.sales);
@@ -380,7 +402,7 @@ class _InventoryValuationReportScreenState
             );
           }
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: [
               _MetricPair(
                 leftLabel: 'Total stock value',
@@ -457,6 +479,14 @@ class _InventoryValuationReportScreenState
   }
 
   Future<void> _exportInventoryCsv(InventoryValuationReport data) async {
+    if (!await requireEntitlement(
+      context,
+      ref,
+      key: BillingEntitlementKeys.reportsExport,
+      featureName: 'Report export',
+    )) {
+      return;
+    }
     setState(() => _exporting = true);
     try {
       final csv = const CsvExportService().inventoryCsv(data);
@@ -512,7 +542,7 @@ class _CustomerBalancesReportScreenState
             );
           }
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: [
               _MetricPair(
                 leftLabel: 'Total owed to you',
@@ -528,6 +558,14 @@ class _CustomerBalancesReportScreenState
                 onPressed: _exporting
                     ? null
                     : () async {
+                        if (!await requireEntitlement(
+                          context,
+                          ref,
+                          key: BillingEntitlementKeys.reportsExport,
+                          featureName: 'Report export',
+                        )) {
+                          return;
+                        }
                         setState(() => _exporting = true);
                         try {
                           final csv = const CsvExportService().customersCsv(
@@ -630,7 +668,7 @@ class _SupplierBalancesReportScreenState
             );
           }
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: [
               _MetricPair(
                 leftLabel: 'Total you owe',
@@ -646,6 +684,14 @@ class _SupplierBalancesReportScreenState
                 onPressed: _exporting
                     ? null
                     : () async {
+                        if (!await requireEntitlement(
+                          context,
+                          ref,
+                          key: BillingEntitlementKeys.reportsExport,
+                          featureName: 'Report export',
+                        )) {
+                          return;
+                        }
                         setState(() => _exporting = true);
                         try {
                           final csv = const CsvExportService().suppliersCsv(

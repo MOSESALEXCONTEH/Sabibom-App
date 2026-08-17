@@ -1,4 +1,5 @@
 import type {VercelRequest, VercelResponse} from "@vercel/node";
+import {adminFirestore} from "../../config/firebase-admin";
 import {authenticateRequest} from "../../middleware/authenticate-request";
 import {enforceRateLimit} from "../../middleware/rate-limit";
 import {
@@ -8,6 +9,7 @@ import {
 } from "../../prompts/business-question-prompt";
 import {businessQuestionRequestSchema} from "../../schemas/business-question-schema";
 import {requireBusinessAccess} from "../../services/business-access-service";
+import {consumeSabiRequest} from "../../services/billing/entitlements";
 import {
   detectMetric,
   loadVerifiedMetric,
@@ -56,6 +58,11 @@ export default createHandler(["POST"], async (req: VercelRequest, res: VercelRes
     businessId,
     requiredPermission: "use_sabi",
   });
+  await consumeSabiRequest({
+    db: adminFirestore(),
+    businessId,
+    uid: identity.uid,
+  });
 
   await enforceRateLimit({
     uid: identity.uid,
@@ -72,7 +79,7 @@ export default createHandler(["POST"], async (req: VercelRequest, res: VercelRes
       answer:
         replyLanguage === "krio"
           ? "A kin draft da sale/receipt for yu. Open Create Sale with Sabi, tell me di items and prices, then review and confirm."
-          : "I can draft that sale/receipt for you. Open Create Sale with Sabi, tell me the items and prices (for example: sold 2 rice at 50 Le and 1 oil at 30 Le), then review and confirm.",
+          : "I can draft that sale/receipt for you. Open Create Sale with Sabi, tell me the items and prices (for example: sold 2 rice at 50 and 1 oil at 30), then review and confirm.",
       metric: null,
       action: "open_sale_draft",
     });

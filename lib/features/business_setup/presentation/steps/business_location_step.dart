@@ -53,31 +53,19 @@ class BusinessLocationStep extends StatelessWidget {
           onChanged: (value) => onChanged(address: value),
         ),
         const SizedBox(height: AppSpacing.md),
-        DropdownButtonFormField<String>(
-          initialValue: data.district.isEmpty ? null : data.district,
-          decoration: const InputDecoration(labelText: 'District'),
-          items: BusinessSetupData.districts
-              .map(
-                (district) =>
-                    DropdownMenuItem(value: district, child: Text(district)),
-              )
-              .toList(growable: false),
-          onChanged: (value) => onChanged(district: value ?? ''),
-        ),
-        if (data.district == 'Other') ...<Widget>[
-          const SizedBox(height: AppSpacing.md),
-          TextFormField(
-            initialValue: data.customDistrict,
-            decoration: const InputDecoration(
-              labelText: 'Custom district / area',
-            ),
-            onChanged: (value) => onChanged(customDistrict: value),
+        TextFormField(
+          initialValue: data.effectiveDistrict,
+          decoration: const InputDecoration(
+            labelText: 'State, province, district or region',
           ),
-        ],
+          textCapitalization: TextCapitalization.words,
+          onChanged: (value) => onChanged(district: value),
+        ),
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           initialValue: data.country,
           decoration: const InputDecoration(labelText: 'Country'),
+          textCapitalization: TextCapitalization.words,
           onChanged: (value) => onChanged(country: value),
         ),
       ],

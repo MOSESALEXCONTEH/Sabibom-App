@@ -48,7 +48,6 @@ class BusinessDetailsStep extends StatelessWidget {
             height: 96,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              borderRadius: BorderRadius.circular(999),
               border: Border.all(color: context.borderColor),
               color: context.surfaceColor,
             ),

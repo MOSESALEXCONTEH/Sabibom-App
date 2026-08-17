@@ -357,9 +357,13 @@ class LocalBusinessAnswers {
     if (rows.isEmpty) {
       return 'I checked your customers. Nobody currently owes a balance.';
     }
+    final currencySymbol = await _currencySymbol(businessId);
     final listed = rows
         .take(8)
-        .map((r) => '• ${r.name} — Le ${(r.balance / 100).toStringAsFixed(2)}')
+        .map(
+          (r) =>
+              '• ${r.name} — $currencySymbol ${(r.balance / 100).toStringAsFixed(2)}',
+        )
         .join('\n');
     final more = rows.length > 8 ? '\n…and ${rows.length - 8} more.' : '';
     return 'I found ${rows.length} customer${rows.length == 1 ? '' : 's'} with balances:\n$listed$more';
@@ -389,9 +393,13 @@ class LocalBusinessAnswers {
     if (rows.isEmpty) {
       return 'I checked your suppliers. You do not currently owe any supplier balances.';
     }
+    final currencySymbol = await _currencySymbol(businessId);
     final listed = rows
         .take(8)
-        .map((r) => '• ${r.name} — Le ${(r.balance / 100).toStringAsFixed(2)}')
+        .map(
+          (r) =>
+              '• ${r.name} — $currencySymbol ${(r.balance / 100).toStringAsFixed(2)}',
+        )
         .join('\n');
     final more = rows.length > 8 ? '\n…and ${rows.length - 8} more.' : '';
     return 'I found ${rows.length} supplier${rows.length == 1 ? '' : 's'} you owe:\n$listed$more';
@@ -469,7 +477,8 @@ class LocalBusinessAnswers {
     if (wantsCount) {
       return 'You completed $count sale${count == 1 ? '' : 's'} ${period.label}.';
     }
-    return 'You sold Le ${(totalMinor / 100).toStringAsFixed(2)} across $count sale${count == 1 ? '' : 's'} ${period.label}.';
+    final currencySymbol = await _currencySymbol(businessId);
+    return 'You sold $currencySymbol ${(totalMinor / 100).toStringAsFixed(2)} across $count sale${count == 1 ? '' : 's'} ${period.label}.';
   }
 
   Future<String> _expensesAnswer(
@@ -495,7 +504,8 @@ class LocalBusinessAnswers {
           (data['amountMinor'] as num?)?.round() ??
           (((data['amount'] as num?)?.toDouble() ?? 0) * 100).round();
     }
-    return 'You recorded $count expense${count == 1 ? '' : 's'} totaling Le ${(totalMinor / 100).toStringAsFixed(2)} ${period.label}.';
+    final currencySymbol = await _currencySymbol(businessId);
+    return 'You recorded $count expense${count == 1 ? '' : 's'} totaling $currencySymbol ${(totalMinor / 100).toStringAsFixed(2)} ${period.label}.';
   }
 
   Future<String> _businessReportAnswer(
@@ -599,18 +609,26 @@ class LocalBusinessAnswers {
     final profitNote = cogsEstimated
         ? ' (estimated because some item costs are missing)'
         : '';
+    final currencySymbol = await _currencySymbol(businessId);
 
     return '$heading for ${period.label}:\n'
-        '• Sales: $salesCount totaling ${_money(netSalesMinor)}\n'
-        '• Received: ${_money(amountPaidMinor)}\n'
-        '• Credit sales: ${_money(creditMinor)}\n'
-        '• Expenses: $expenseCount totaling ${_money(expenseMinor)}\n'
-        '• Purchases: $purchaseCount totaling ${_money(purchaseMinor)}\n'
-        '• Gross profit: ${_money(grossProfitMinor)}$profitNote\n'
-        '• Net profit: ${_money(netProfitMinor)}$profitNote';
+        '• Sales: $salesCount totaling ${_money(netSalesMinor, currencySymbol)}\n'
+        '• Received: ${_money(amountPaidMinor, currencySymbol)}\n'
+        '• Credit sales: ${_money(creditMinor, currencySymbol)}\n'
+        '• Expenses: $expenseCount totaling ${_money(expenseMinor, currencySymbol)}\n'
+        '• Purchases: $purchaseCount totaling ${_money(purchaseMinor, currencySymbol)}\n'
+        '• Gross profit: ${_money(grossProfitMinor, currencySymbol)}$profitNote\n'
+        '• Net profit: ${_money(netProfitMinor, currencySymbol)}$profitNote';
   }
 
-  String _money(int minor) => 'Le ${(minor / 100).toStringAsFixed(2)}';
+  Future<String> _currencySymbol(String businessId) async {
+    final snapshot = await _db.collection('businesses').doc(businessId).get();
+    final symbol = (snapshot.data()?['currencySymbol'] as String?)?.trim();
+    return symbol == null || symbol.isEmpty ? 'Le' : symbol;
+  }
+
+  String _money(int minor, String currencySymbol) =>
+      '$currencySymbol ${(minor / 100).toStringAsFixed(2)}';
 
   Future<String> _customerListAnswer(
     String businessId,

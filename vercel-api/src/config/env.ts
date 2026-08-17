@@ -36,6 +36,11 @@ const envSchema = z.object({
   FIREBASE_PRIVATE_KEY: z.string().min(1),
   ALLOWED_ORIGINS: z.string().optional().default(""),
   APP_ENV: z.string().optional().default("development"),
+  GOOGLE_PLAY_CLIENT_EMAIL: z.string().email().optional(),
+  GOOGLE_PLAY_PRIVATE_KEY: z.string().min(1).optional(),
+  GOOGLE_PLAY_PACKAGE_NAME: z.string().min(1).default("com.sabibom.app"),
+  GOOGLE_PLAY_RTDN_TOKEN: z.string().min(20).optional(),
+  BILLING_ENFORCEMENT_MODE: z.enum(["shadow", "enforced"]).default("shadow"),
 });
 
 export type AppEnv = {
@@ -48,6 +53,11 @@ export type AppEnv = {
   firebasePrivateKey: string;
   allowedOrigins: string[];
   appEnv: string;
+  googlePlayClientEmail: string;
+  googlePlayPrivateKey: string;
+  googlePlayPackageName: string;
+  googlePlayRtdnToken: string | null;
+  billingEnforcementMode: "shadow" | "enforced";
 };
 
 let cached: AppEnv | null = null;
@@ -65,6 +75,13 @@ export function getEnv(): AppEnv {
     FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
     ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS ?? "",
     APP_ENV: process.env.APP_ENV ?? "development",
+    GOOGLE_PLAY_CLIENT_EMAIL: process.env.GOOGLE_PLAY_CLIENT_EMAIL,
+    GOOGLE_PLAY_PRIVATE_KEY: process.env.GOOGLE_PLAY_PRIVATE_KEY,
+    GOOGLE_PLAY_PACKAGE_NAME:
+      process.env.GOOGLE_PLAY_PACKAGE_NAME ?? "com.sabibom.app",
+    GOOGLE_PLAY_RTDN_TOKEN: process.env.GOOGLE_PLAY_RTDN_TOKEN,
+    BILLING_ENFORCEMENT_MODE:
+      process.env.BILLING_ENFORCEMENT_MODE === "enforced" ? "enforced" : "shadow",
   });
 
   if (!parsed.success) {
@@ -88,6 +105,14 @@ export function getEnv(): AppEnv {
       .map((item) => item.trim())
       .filter(Boolean),
     appEnv: parsed.data.APP_ENV,
+    googlePlayClientEmail:
+      parsed.data.GOOGLE_PLAY_CLIENT_EMAIL ?? parsed.data.FIREBASE_CLIENT_EMAIL,
+    googlePlayPrivateKey: normalizePrivateKey(
+      parsed.data.GOOGLE_PLAY_PRIVATE_KEY ?? parsed.data.FIREBASE_PRIVATE_KEY,
+    ),
+    googlePlayPackageName: parsed.data.GOOGLE_PLAY_PACKAGE_NAME,
+    googlePlayRtdnToken: parsed.data.GOOGLE_PLAY_RTDN_TOKEN ?? null,
+    billingEnforcementMode: parsed.data.BILLING_ENFORCEMENT_MODE,
   };
   return cached;
 }

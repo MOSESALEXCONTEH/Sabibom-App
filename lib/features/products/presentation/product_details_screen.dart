@@ -8,6 +8,7 @@ import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/sync/record_sync_status.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_network_image.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../inventory/application/inventory_providers.dart';
@@ -150,7 +151,13 @@ class _ProductDetailsBody extends ConsumerWidget {
             hasPermissionProvider(AppPermission.manageProducts),
           );
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+            padding: appSafeScrollPadding(
+              context,
+              left: 20,
+              top: 12,
+              right: 20,
+              bottom: 40,
+            ),
             children: <Widget>[
               if ((product.imageUrl ?? '').trim().isNotEmpty) ...<Widget>[
                 AppNetworkImage(

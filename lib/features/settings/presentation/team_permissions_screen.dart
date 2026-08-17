@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../auth/application/user_profile_provider.dart';
 
 /// Shows who can access this business and what each role can do.
@@ -23,7 +24,7 @@ class TeamPermissionsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Team and Permissions')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: appSafeScrollPadding(context),
         children: <Widget>[
           Text(
             'Control who can sell, manage stock, and change business settings. '
@@ -47,7 +48,9 @@ class TeamPermissionsScreen extends ConsumerWidget {
                     ownerId == currentUid ? 'You (Owner)' : 'Business owner',
                   ),
                   subtitle: Text(
-                    ownerId.isEmpty ? 'Owner account' : 'ID: ${_short(ownerId)}',
+                    ownerId.isEmpty
+                        ? 'Owner account'
+                        : 'ID: ${_short(ownerId)}',
                   ),
                   trailing: const Chip(label: Text('Owner')),
                 ),
@@ -57,9 +60,9 @@ class TeamPermissionsScreen extends ConsumerWidget {
           const SizedBox(height: AppSpacing.md),
           Text(
             'Team members',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.sm),
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -73,10 +76,12 @@ class TeamPermissionsScreen extends ConsumerWidget {
                 return const Center(child: CircularProgressIndicator());
               }
               final docs = snapshot.data?.docs ?? const [];
-              final members = docs.where((doc) {
-                final role = doc.data()['role'] as String? ?? '';
-                return role != 'owner';
-              }).toList(growable: false);
+              final members = docs
+                  .where((doc) {
+                    final role = doc.data()['role'] as String? ?? '';
+                    return role != 'owner';
+                  })
+                  .toList(growable: false);
               if (members.isEmpty) {
                 return const Card(
                   child: ListTile(
@@ -90,36 +95,42 @@ class TeamPermissionsScreen extends ConsumerWidget {
                 );
               }
               return Column(
-                children: members.map((doc) {
-                  final data = doc.data();
-                  final role = (data['role'] as String? ?? 'cashier').toLowerCase();
-                  final status = data['status'] as String? ?? 'active';
-                  final name = data['displayName'] as String? ??
-                      data['fullName'] as String? ??
-                      'Team member';
-                  return Card(
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?'),
-                      ),
-                      title: Text(name),
-                      subtitle: Text('${_roleLabel(role)} · $status'),
-                      trailing: Text(
-                        _roleLabel(role),
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                    ),
-                  );
-                }).toList(growable: false),
+                children: members
+                    .map((doc) {
+                      final data = doc.data();
+                      final role = (data['role'] as String? ?? 'cashier')
+                          .toLowerCase();
+                      final status = data['status'] as String? ?? 'active';
+                      final name =
+                          data['displayName'] as String? ??
+                          data['fullName'] as String? ??
+                          'Team member';
+                      return Card(
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            ),
+                          ),
+                          title: Text(name),
+                          subtitle: Text('${_roleLabel(role)} · $status'),
+                          trailing: Text(
+                            _roleLabel(role),
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
               );
             },
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
             'Roles',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.sm),
           const _RoleCard(

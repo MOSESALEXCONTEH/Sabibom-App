@@ -61,6 +61,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   NotificationStatus? _statusFilter;
   NotificationCategory? _categoryFilter;
   NotificationPriority? _priorityFilter;
+  final Set<String> _selectedIds = <String>{};
+
+  bool get _isSelecting => _selectedIds.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -77,67 +80,84 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: Text(
+          _isSelecting ? '${_selectedIds.length} selected' : 'Notifications',
+        ),
         actions: [
-          IconButton(
-            tooltip: 'Notification settings',
-            onPressed: () =>
-                context.pushNamed(AppRouteNames.settingsNotifications),
-            icon: const Icon(Icons.tune),
-          ),
-          if (uid != null)
-            TextButton(
-              onPressed: () => ref
-                  .read(notificationsRepositoryProvider)
-                  .markManyRead(
-                    uid,
-                    visibleItems.where((n) => n.isUnread).map((n) => n.id),
-                  ),
-              child: const Text('Mark all read'),
+          if (_isSelecting && uid != null) ...<Widget>[
+            IconButton(
+              tooltip: 'Delete selected',
+              onPressed: () => _deleteNotifications(uid, _selectedIds),
+              icon: const Icon(Icons.delete_outline),
             ),
-          if (uid != null && _statusFilter == NotificationStatus.archived)
-            TextButton(
-              onPressed: () async {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Delete archived?'),
-                    content: const Text(
-                      'Permanently remove archived notifications from this device account.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Delete'),
-                      ),
-                    ],
-                  ),
-                );
-                if (ok != true) return;
-                final count = await ref
+            IconButton(
+              tooltip: 'Cancel selection',
+              onPressed: () => setState(_selectedIds.clear),
+              icon: const Icon(Icons.close),
+            ),
+          ] else ...<Widget>[
+            IconButton(
+              tooltip: 'Notification settings',
+              onPressed: () =>
+                  context.pushNamed(AppRouteNames.settingsNotifications),
+              icon: const Icon(Icons.tune),
+            ),
+            if (uid != null)
+              TextButton(
+                onPressed: () => ref
                     .read(notificationsRepositoryProvider)
-                    .deleteMany(
+                    .markManyRead(
                       uid,
-                      visibleItems.where((n) => n.isArchived).map((n) => n.id),
-                    );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        count == 0
-                            ? 'No archived notifications to delete.'
-                            : 'Deleted $count archived notification${count == 1 ? '' : 's'}.',
+                      visibleItems.where((n) => n.isUnread).map((n) => n.id),
+                    ),
+                child: const Text('Mark all read'),
+              ),
+            if (uid != null && _statusFilter == NotificationStatus.archived)
+              TextButton(
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Delete archived?'),
+                      content: const Text(
+                        'Permanently remove archived notifications from this device account.',
                       ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Delete'),
+                        ),
+                      ],
                     ),
                   );
-                }
-              },
-              child: const Text('Delete archived'),
-            ),
+                  if (ok != true) return;
+                  final count = await ref
+                      .read(notificationsRepositoryProvider)
+                      .deleteMany(
+                        uid,
+                        visibleItems
+                            .where((n) => n.isArchived)
+                            .map((n) => n.id),
+                      );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          count == 0
+                              ? 'No archived notifications to delete.'
+                              : 'Deleted $count archived notification${count == 1 ? '' : 's'}.',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Delete archived'),
+              ),
+          ],
         ],
       ),
       body: Column(
@@ -260,7 +280,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     final n = filtered[index];
                     return _NotificationCard(
                       notification: n,
-                      onOpen: () => _open(n),
+                      selected: _selectedIds.contains(n.id),
+                      selectionMode: _isSelecting,
+                      onOpen: () =>
+                          _isSelecting ? _toggleSelection(n.id) : _open(n),
+                      onLongPress: uid == null
+                          ? null
+                          : () => _toggleSelection(n.id),
+                      onSelect: uid == null
+                          ? null
+                          : () => _toggleSelection(n.id),
+                      onDelete: uid == null
+                          ? null
+                          : () => _deleteNotifications(uid, <String>{n.id}),
                       onArchive: uid == null
                           ? null
                           : () => ref
@@ -296,6 +328,66 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
     if (!mounted) return;
     await openNotificationRoute(context, n);
+  }
+
+  void _toggleSelection(String notificationId) {
+    setState(() {
+      if (!_selectedIds.add(notificationId)) {
+        _selectedIds.remove(notificationId);
+      }
+    });
+  }
+
+  Future<void> _deleteNotifications(String uid, Iterable<String> ids) async {
+    final selected = ids.toSet();
+    if (selected.isEmpty) return;
+    final count = selected.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          count == 1 ? 'Delete notification?' : 'Delete notifications?',
+        ),
+        content: Text(
+          count == 1
+              ? 'This notification will be permanently removed.'
+              : 'Permanently remove these $count notifications?',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final deleted = await ref
+          .read(notificationsRepositoryProvider)
+          .deleteMany(uid, selected);
+      if (!mounted) return;
+      setState(() => _selectedIds.removeAll(selected));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Deleted $deleted notification${deleted == 1 ? '' : 's'}.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not delete notifications. Try again.'),
+        ),
+      );
+    }
   }
 
   Widget _chip({
@@ -365,12 +457,22 @@ class _NotificationCard extends StatelessWidget {
   const _NotificationCard({
     required this.notification,
     required this.onOpen,
+    required this.selected,
+    required this.selectionMode,
+    this.onLongPress,
+    this.onSelect,
+    this.onDelete,
     this.onArchive,
     this.onToggleRead,
   });
 
   final AppNotification notification;
   final VoidCallback onOpen;
+  final bool selected;
+  final bool selectionMode;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onSelect;
+  final VoidCallback? onDelete;
   final VoidCallback? onArchive;
   final VoidCallback? onToggleRead;
 
@@ -397,6 +499,15 @@ class _NotificationCard extends StatelessWidget {
     };
 
     return Card(
+      shape: selected
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.primary,
+                width: 2,
+              ),
+            )
+          : null,
       color: n.isUnread
           ? Theme.of(
               context,
@@ -404,12 +515,20 @@ class _NotificationCard extends StatelessWidget {
           : null,
       child: InkWell(
         onTap: onOpen,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (selectionMode) ...<Widget>[
+                Checkbox(
+                  value: selected,
+                  onChanged: onSelect == null ? null : (_) => onSelect!(),
+                ),
+                const SizedBox(width: 4),
+              ],
               CircleAvatar(
                 backgroundColor: Theme.of(
                   context,
@@ -491,6 +610,7 @@ class _NotificationCard extends StatelessWidget {
                 onSelected: (value) {
                   if (value == 'read') onToggleRead?.call();
                   if (value == 'archive') onArchive?.call();
+                  if (value == 'delete') onDelete?.call();
                 },
                 itemBuilder: (context) => [
                   PopupMenuItem(
@@ -498,6 +618,16 @@ class _NotificationCard extends StatelessWidget {
                     child: Text(n.isUnread ? 'Mark read' : 'Mark unread'),
                   ),
                   const PopupMenuItem(value: 'archive', child: Text('Archive')),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: <Widget>[
+                        Icon(Icons.delete_outline),
+                        SizedBox(width: 8),
+                        Text('Delete'),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ],

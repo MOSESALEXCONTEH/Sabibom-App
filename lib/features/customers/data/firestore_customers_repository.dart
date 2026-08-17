@@ -233,6 +233,7 @@ class FirestoreCustomersRepository implements CustomersRepository {
     }
 
     final customerRef = _customers(businessId).doc(request.customerId);
+    final businessRef = _firestore.collection('businesses').doc(businessId);
     final branchRef = _firestore
         .collection('businesses')
         .doc(businessId)
@@ -244,6 +245,7 @@ class FirestoreCustomersRepository implements CustomersRepository {
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(customerRef);
       final branchSnapshot = await transaction.get(branchRef);
+      final businessSnapshot = await transaction.get(businessRef);
       if (!snapshot.exists) throw const CustomerException('not-found');
       if (!branchSnapshot.exists ||
           branchSnapshot.data()?['status'] != 'active') {
@@ -253,6 +255,8 @@ class FirestoreCustomersRepository implements CustomersRepository {
         );
       }
       final customer = Customer.fromFirestore(snapshot);
+      final currencyCode =
+          businessSnapshot.data()?['currencyCode'] as String? ?? 'SLE';
       if (request.amountMinor > customer.balanceMinor) {
         throw const CustomerException(
           'failed-precondition',
@@ -297,7 +301,7 @@ class FirestoreCustomersRepository implements CustomersRepository {
         'amount': minorToMoney(request.amountMinor),
         'amountMinor': request.amountMinor,
         'branchId': writableBranchId,
-        'currencyCode': 'SLE',
+        'currencyCode': currencyCode,
         'referenceId': customer.id,
         'createdBy': user.uid,
         'createdByName': user.displayName ?? user.email,

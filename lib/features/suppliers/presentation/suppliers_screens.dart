@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../core/widgets/app_list_primitives.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../../core/widgets/app_tab_page_scaffold.dart';
@@ -500,7 +501,7 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
       child: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          padding: appSafeScrollPadding(context, left: 20, top: 12, right: 20),
           children: <Widget>[
             TextFormField(
               controller: _name,
@@ -949,7 +950,12 @@ class _SupplierPaymentScreenState extends ConsumerState<SupplierPaymentScreen> {
           return Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              padding: appSafeScrollPadding(
+                context,
+                left: 20,
+                top: 12,
+                right: 20,
+              ),
               children: <Widget>[
                 Text(
                   supplier.name,

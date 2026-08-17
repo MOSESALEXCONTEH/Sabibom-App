@@ -17,7 +17,10 @@ import '../features/customers/presentation/customer_payment_screen.dart';
 import '../features/customers/presentation/customers_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/billing/presentation/billing_screen.dart';
+import '../features/billing/domain/billing_entitlements.dart';
+import '../features/billing/presentation/billing_gate.dart';
 import '../features/more/presentation/more_screen.dart';
+import '../features/dashboard/presentation/business_health_screen.dart';
 import '../features/backup/presentation/backup_screen.dart';
 import '../features/end_of_day/presentation/end_of_day_screen.dart';
 import '../features/notifications/application/business_summary_service.dart';
@@ -67,6 +70,20 @@ import '../features/team/presentation/team_widgets.dart';
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'root',
 );
+
+DateTime? _isoWeekStart(String value) {
+  final match = RegExp(r'^(\d{4})-W(\d{2})$').firstMatch(value);
+  if (match == null) return null;
+  final year = int.tryParse(match.group(1)!);
+  final week = int.tryParse(match.group(2)!);
+  if (year == null || week == null || week < 1 || week > 53) return null;
+  final januaryFourth = DateTime(year, 1, 4);
+  final firstMonday = januaryFourth.subtract(
+    Duration(days: januaryFourth.weekday - DateTime.monday),
+  );
+  return firstMonday.add(Duration(days: (week - 1) * 7));
+}
+
 final GlobalKey<NavigatorState> homeNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'home',
 );
@@ -135,6 +152,7 @@ abstract final class AppRoutes {
   static const attention = '/attention';
   static const activity = '/activity';
   static const reports = '/reports';
+  static const businessHealth = '/reports/business-health';
   static const dailySummary = '/reports/daily-summary';
   static const weeklyReport = '/reports/weekly';
   static const endOfDay = '/reports/end-of-day';
@@ -177,6 +195,7 @@ abstract final class AppRouteNames {
   static const editCustomer = 'editCustomer';
   static const customerPayment = 'customerPayment';
   static const more = 'more';
+  static const businessHealth = 'businessHealth';
   static const settings = 'settings';
   static const settingsBusiness = 'settingsBusiness';
   static const settingsReceipt = 'settingsReceipt';
@@ -432,9 +451,13 @@ final GoRouter appRouter = GoRouter(
                 GoRoute(
                   path: 'message',
                   name: AppRouteNames.customerMessageCampaign,
-                  builder: (_, state) => CustomerMessageCampaignScreen(
-                    preselectedCustomerId:
-                        state.uri.queryParameters['customerId'],
+                  builder: (_, state) => EntitlementGate(
+                    entitlementKey: BillingEntitlementKeys.messagingBulk,
+                    featureName: 'Customer messaging',
+                    child: CustomerMessageCampaignScreen(
+                      preselectedCustomerId:
+                          state.uri.queryParameters['customerId'],
+                    ),
                   ),
                 ),
                 GoRoute(
@@ -751,6 +774,15 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
+      path: AppRoutes.businessHealth,
+      name: AppRouteNames.businessHealth,
+      builder: (_, state) => EntitlementGate(
+        entitlementKey: BillingEntitlementKeys.reportsAdvanced,
+        featureName: 'Business Health AI Score',
+        child: BusinessHealthScreen(key: state.pageKey),
+      ),
+    ),
+    GoRoute(
       path: AppRoutes.reports,
       name: AppRouteNames.reports,
       builder: (_, state) => ReportsScreen(key: state.pageKey),
@@ -758,12 +790,20 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'profit-loss',
           name: AppRouteNames.reportProfitLoss,
-          builder: (_, state) => ProfitLossReportScreen(key: state.pageKey),
+          builder: (_, state) => EntitlementGate(
+            entitlementKey: BillingEntitlementKeys.reportsAdvanced,
+            featureName: 'Profit and loss report',
+            child: ProfitLossReportScreen(key: state.pageKey),
+          ),
         ),
         GoRoute(
           path: 'product-profit',
           name: AppRouteNames.reportProductProfit,
-          builder: (_, state) => ProductProfitReportScreen(key: state.pageKey),
+          builder: (_, state) => EntitlementGate(
+            entitlementKey: BillingEntitlementKeys.reportsAdvanced,
+            featureName: 'Product profit report',
+            child: ProductProfitReportScreen(key: state.pageKey),
+          ),
         ),
         GoRoute(
           path: 'product-expiry',
@@ -773,8 +813,11 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'inventory',
           name: AppRouteNames.reportInventory,
-          builder: (_, state) =>
-              InventoryValuationReportScreen(key: state.pageKey),
+          builder: (_, state) => EntitlementGate(
+            entitlementKey: BillingEntitlementKeys.reportsAdvanced,
+            featureName: 'Inventory valuation report',
+            child: InventoryValuationReportScreen(key: state.pageKey),
+          ),
         ),
         GoRoute(
           path: 'customers',
@@ -791,37 +834,50 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'daily-summary/:dateKey',
           name: AppRouteNames.dailySummary,
-          builder: (context, state) => DailySummaryScreen(
-            key: state.pageKey,
-            dateKey:
+          builder: (context, state) {
+            final dateKey =
                 state.pathParameters['dateKey'] ??
-                BusinessSummaryService.dateKeyFor(DateTime.now()),
-          ),
+                BusinessSummaryService.dateKeyFor(DateTime.now());
+            return ReportHistoryGate(
+              reportDate: DateTime.tryParse(dateKey),
+              child: DailySummaryScreen(key: state.pageKey, dateKey: dateKey),
+            );
+          },
         ),
         GoRoute(
           path: 'weekly/:weekKey',
           name: AppRouteNames.weeklyReport,
-          builder: (context, state) => WeeklyReportScreen(
-            key: state.pageKey,
-            weekKey:
+          builder: (context, state) {
+            final weekKey =
                 state.pathParameters['weekKey'] ??
-                BusinessSummaryService.weekKeyFor(DateTime.now()),
-          ),
+                BusinessSummaryService.weekKeyFor(DateTime.now());
+            return ReportHistoryGate(
+              reportDate: _isoWeekStart(weekKey),
+              child: WeeklyReportScreen(key: state.pageKey, weekKey: weekKey),
+            );
+          },
         ),
         GoRoute(
           path: 'end-of-day/:dateKey',
           name: AppRouteNames.endOfDay,
-          builder: (context, state) => EndOfDayScreen(
-            key: state.pageKey,
-            dateKey: state.pathParameters['dateKey'],
-          ),
+          builder: (context, state) {
+            final dateKey = state.pathParameters['dateKey'];
+            return ReportHistoryGate(
+              reportDate: dateKey == null ? null : DateTime.tryParse(dateKey),
+              child: EndOfDayScreen(key: state.pageKey, dateKey: dateKey),
+            );
+          },
         ),
       ],
     ),
     GoRoute(
       path: AppRoutes.backup,
       name: AppRouteNames.backup,
-      builder: (_, state) => BackupScreen(key: state.pageKey),
+      builder: (_, state) => EntitlementGate(
+        entitlementKey: BillingEntitlementKeys.backupEnabled,
+        featureName: 'Business backup',
+        child: BackupScreen(key: state.pageKey),
+      ),
     ),
     GoRoute(
       path: AppRoutes.help,
@@ -939,19 +995,31 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.approvals,
       name: AppRouteNames.approvals,
-      builder: (_, state) => ApprovalsScreen(key: state.pageKey),
+      builder: (_, state) => EntitlementGate(
+        entitlementKey: BillingEntitlementKeys.approvalsEnabled,
+        featureName: 'Approval workflows',
+        child: ApprovalsScreen(key: state.pageKey),
+      ),
       routes: <RouteBase>[
         GoRoute(
           path: 'settings',
           name: AppRouteNames.approvalSettings,
-          builder: (_, state) => ApprovalSettingsScreen(key: state.pageKey),
+          builder: (_, state) => EntitlementGate(
+            entitlementKey: BillingEntitlementKeys.approvalsEnabled,
+            featureName: 'Approval workflows',
+            child: ApprovalSettingsScreen(key: state.pageKey),
+          ),
         ),
         GoRoute(
           path: ':approvalId',
           name: AppRouteNames.approvalDetails,
-          builder: (context, state) => ApprovalDetailsScreen(
-            key: state.pageKey,
-            approvalId: state.pathParameters['approvalId']!,
+          builder: (context, state) => EntitlementGate(
+            entitlementKey: BillingEntitlementKeys.approvalsEnabled,
+            featureName: 'Approval workflows',
+            child: ApprovalDetailsScreen(
+              key: state.pageKey,
+              approvalId: state.pathParameters['approvalId']!,
+            ),
           ),
         ),
       ],

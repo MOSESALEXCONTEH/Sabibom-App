@@ -18,6 +18,7 @@ class Business {
     required this.district,
     required this.country,
     required this.currency,
+    this.timezone = 'UTC',
     required this.taxEnabled,
     required this.taxPercentage,
     required this.financialYearStartMonth,
@@ -57,6 +58,7 @@ class Business {
       district: data.effectiveDistrict,
       country: data.country,
       currency: data.currency,
+      timezone: data.timezone,
       taxEnabled: data.taxEnabled,
       taxPercentage: data.taxEnabled ? data.taxPercentage : 0,
       financialYearStartMonth: data.financialYearStartMonth,
@@ -103,6 +105,7 @@ class Business {
         name: data['currencyName'] as String? ?? CurrencyConfig.sle.name,
         symbol: data['currencySymbol'] as String? ?? CurrencyConfig.sle.symbol,
       ),
+      timezone: data['timezone'] as String? ?? 'Africa/Freetown',
       taxEnabled: data['taxEnabled'] as bool? ?? false,
       taxPercentage: (data['taxPercentage'] as num?)?.toDouble() ?? 0,
       financialYearStartMonth:
@@ -135,6 +138,7 @@ class Business {
   final String district;
   final String country;
   final CurrencyConfig currency;
+  final String timezone;
   final bool taxEnabled;
   final double taxPercentage;
   final String financialYearStartMonth;
@@ -168,6 +172,7 @@ class Business {
       'currencyCode': currency.code,
       'currencyName': currency.name,
       'currencySymbol': currency.symbol,
+      'timezone': timezone,
       'taxEnabled': taxEnabled,
       'taxPercentage': taxPercentage,
       'financialYearStartMonth': financialYearStartMonth,

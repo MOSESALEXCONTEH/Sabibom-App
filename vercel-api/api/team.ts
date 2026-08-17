@@ -1,6 +1,7 @@
 import type {VercelRequest, VercelResponse} from "@vercel/node";
 import invite from "../src/http/team/invite";
 import memberStatus from "../src/http/team/member-status";
+import createBranch from "../src/http/team/create-branch";
 
 type Handler = (req: VercelRequest, res: VercelResponse) => Promise<void>;
 
@@ -15,6 +16,7 @@ function actionKey(req: VercelRequest): string {
 
 const routes: Record<string, Handler> = {
   invite,
+  "create-branch": createBranch,
   "member-status": memberStatus,
 };
 

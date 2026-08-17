@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../auth/application/user_profile_provider.dart';
 import '../../business_setup/domain/business_setup_data.dart';
 
@@ -18,18 +19,12 @@ class _TaxCurrencyScreenState extends ConsumerState<TaxCurrencyScreen> {
   final _taxController = TextEditingController();
   var _taxEnabled = false;
   var _currency = CurrencyConfig.sle;
+  var _timezone = 'UTC';
   var _financialYearStartMonth = 'January';
   var _hydrated = false;
   var _saving = false;
 
-  static const _currencies = <CurrencyConfig>[
-    CurrencyConfig.sle,
-    CurrencyConfig(code: 'USD', name: 'US Dollar', symbol: r'$'),
-    CurrencyConfig(code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵'),
-    CurrencyConfig(code: 'NGN', name: 'Nigerian Naira', symbol: '₦'),
-    CurrencyConfig(code: 'GBP', name: 'British Pound', symbol: '£'),
-    CurrencyConfig(code: 'EUR', name: 'Euro', symbol: '€'),
-  ];
+  static const _currencies = CurrencyConfig.supported;
 
   @override
   void dispose() {
@@ -39,8 +34,11 @@ class _TaxCurrencyScreenState extends ConsumerState<TaxCurrencyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final businessId =
-        ref.watch(currentUserProfileProvider).asData?.value?.activeBusinessId;
+    final businessId = ref
+        .watch(currentUserProfileProvider)
+        .asData
+        ?.value
+        ?.activeBusinessId;
     if (businessId == null || businessId.isEmpty) {
       return const Scaffold(
         body: Center(child: Text('No business has been set up yet.')),
@@ -61,7 +59,9 @@ class _TaxCurrencyScreenState extends ConsumerState<TaxCurrencyScreen> {
               ((data['taxPercentage'] as num?)?.toDouble() ?? 0).toString();
           _financialYearStartMonth =
               data['financialYearStartMonth'] as String? ?? 'January';
-          final code = data['currencyCode'] as String? ?? CurrencyConfig.sle.code;
+          _timezone = data['timezone'] as String? ?? 'Africa/Freetown';
+          final code =
+              data['currencyCode'] as String? ?? CurrencyConfig.sle.code;
           _currency = _currencies.firstWhere(
             (c) => c.code == code,
             orElse: () => CurrencyConfig(
@@ -75,7 +75,7 @@ class _TaxCurrencyScreenState extends ConsumerState<TaxCurrencyScreen> {
         return Scaffold(
           appBar: AppBar(title: const Text('Tax and Currency')),
           body: ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: <Widget>[
               Text(
                 'These settings control how money and tax appear on sales, '
@@ -92,7 +92,7 @@ class _TaxCurrencyScreenState extends ConsumerState<TaxCurrencyScreen> {
                       (c) => DropdownMenuItem(
                         value: c.code,
                         child: Text(
-                          '${c.code} (${c.symbol}) — ${c.name}',
+                          '${c.code} (${c.symbol}) - ${c.name}',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -141,6 +141,28 @@ class _TaxCurrencyScreenState extends ConsumerState<TaxCurrencyScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<String>(
+                initialValue: BusinessSetupData.timezones.contains(_timezone)
+                    ? _timezone
+                    : 'UTC',
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Business timezone',
+                ),
+                items: BusinessSetupData.timezones
+                    .map(
+                      (timezone) => DropdownMenuItem(
+                        value: timezone,
+                        child: Text(timezone, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _timezone = value);
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              DropdownButtonFormField<String>(
                 initialValue: _financialYearStartMonth,
                 decoration: const InputDecoration(
                   labelText: 'Financial year starts',
@@ -180,27 +202,30 @@ class _TaxCurrencyScreenState extends ConsumerState<TaxCurrencyScreen> {
     final tax = double.tryParse(_taxController.text.trim()) ?? 0;
     if (_taxEnabled && (tax < 0 || tax > 100 || !tax.isFinite)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a tax percentage between 0 and 100.')),
+        const SnackBar(
+          content: Text('Enter a tax percentage between 0 and 100.'),
+        ),
       );
       return;
     }
     setState(() => _saving = true);
     try {
-      await FirebaseFirestore.instance.collection('businesses').doc(businessId).set(
-        <String, Object?>{
-          'currencyCode': _currency.code,
-          'currencyName': _currency.name,
-          'currencySymbol': _currency.symbol,
-          'taxEnabled': _taxEnabled,
-          'taxPercentage': _taxEnabled ? tax : 0,
-          'financialYearStartMonth': _financialYearStartMonth,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .set(<String, Object?>{
+            'currencyCode': _currency.code,
+            'currencyName': _currency.name,
+            'currencySymbol': _currency.symbol,
+            'timezone': _timezone,
+            'taxEnabled': _taxEnabled,
+            'taxPercentage': _taxEnabled ? tax : 0,
+            'financialYearStartMonth': _financialYearStartMonth,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tax and currency updated.')),
+        const SnackBar(content: Text('Financial settings updated.')),
       );
     } finally {
       if (mounted) setState(() => _saving = false);

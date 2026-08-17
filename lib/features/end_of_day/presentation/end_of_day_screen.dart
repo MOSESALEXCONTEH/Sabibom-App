@@ -13,6 +13,7 @@ import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../sales/domain/sale_models.dart';
 import '../../team/application/team_providers.dart';
@@ -96,7 +97,8 @@ class _EndOfDayScreenState extends ConsumerState<EndOfDayScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Could not load End of Day. Check your connection and try again.';
+        _error =
+            'Could not load End of Day. Check your connection and try again.';
       });
     }
   }
@@ -133,9 +135,7 @@ class _EndOfDayScreenState extends ConsumerState<EndOfDayScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            finalize
-                ? 'End of Day finalized.'
-                : 'End of Day draft saved.',
+            finalize ? 'End of Day finalized.' : 'End of Day draft saved.',
           ),
         ),
       );
@@ -160,10 +160,9 @@ class _EndOfDayScreenState extends ConsumerState<EndOfDayScreen> {
     if (active is! ActiveBusinessData) return;
     setState(() => _saving = true);
     try {
-      final summary = await ref.read(endOfDayRepositoryProvider).reopen(
-            businessId: active.business.businessId,
-            dateKey: _dateKey,
-          );
+      final summary = await ref
+          .read(endOfDayRepositoryProvider)
+          .reopen(businessId: active.business.businessId, dateKey: _dateKey);
       if (!mounted) return;
       setState(() => _summary = summary);
     } catch (_) {
@@ -188,17 +187,21 @@ class _EndOfDayScreenState extends ConsumerState<EndOfDayScreen> {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         build: (_) => [
-          pw.Text(biz.name,
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            biz.name,
+            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+          ),
           pw.Text('End of Day · ${summary.dateKey}'),
           pw.SizedBox(height: 16),
           pw.Text('Opening cash: ${money(summary.openingCashMinor)}'),
           pw.Text('Cash sales: ${money(summary.cashSalesMinor)}'),
           pw.Text(
-              'Customer cash payments: ${money(summary.cashCustomerPaymentsMinor)}'),
+            'Customer cash payments: ${money(summary.cashCustomerPaymentsMinor)}',
+          ),
           pw.Text('Cash expenses: ${money(summary.cashExpensesMinor)}'),
           pw.Text(
-              'Supplier cash payments: ${money(summary.cashSupplierPaymentsMinor)}'),
+            'Supplier cash payments: ${money(summary.cashSupplierPaymentsMinor)}',
+          ),
           pw.Text('Expected cash: ${money(summary.expectedCashMinor)}'),
           pw.Text('Counted cash: ${money(summary.countedCashMinor)}'),
           pw.Text(
@@ -210,27 +213,28 @@ class _EndOfDayScreenState extends ConsumerState<EndOfDayScreen> {
     );
     final bytes = await doc.save();
     final dir = await getTemporaryDirectory();
-    final file = File(
-      '${dir.path}/SabiBom_End_Of_Day_${summary.dateKey}.pdf',
-    );
+    final file = File('${dir.path}/SabiBom_End_Of_Day_${summary.dateKey}.pdf');
     await file.writeAsBytes(bytes, flush: true);
     await SharePlus.instance.share(
-      ShareParams(files: [XFile(file.path)], text: 'End of Day ${summary.dateKey}'),
+      ShareParams(
+        files: [XFile(file.path)],
+        text: 'End of Day ${summary.dateKey}',
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final canView = ref.watch(
-          hasPermissionProvider(AppPermission.viewEndOfDayAlerts),
-        ) ||
+    final canView =
+        ref.watch(hasPermissionProvider(AppPermission.viewEndOfDayAlerts)) ||
         ref.watch(hasPermissionProvider(AppPermission.viewSalesReports));
     if (!canView) {
       return const AccessDeniedScreen(
         message: 'You do not have permission to view End of Day.',
       );
     }
-    final canReopen = ref.watch(
+    final canReopen =
+        ref.watch(
           hasPermissionProvider(AppPermission.approveSensitiveActions),
         ) ||
         ref.watch(currentBusinessMembershipProvider).asData?.value?.isOwner ==
@@ -267,119 +271,119 @@ class _EndOfDayScreenState extends ConsumerState<EndOfDayScreen> {
               ),
             )
           : _error != null
-              ? AppErrorState(
-                  message: _error!,
-                  onRetry: _load,
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  children: [
-                    Text(
-                      'Only cash movements affect expected physical cash. '
-                      'Mobile Money, card and bank transfer are excluded.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    if (_breakdown != null) ...[
-                      _row('Cash sales', _money(_breakdown!.cashSalesMinor, symbol)),
-                      _row(
-                        'Customer cash payments',
-                        _money(_breakdown!.cashCustomerPaymentsMinor, symbol),
-                      ),
-                      _row(
-                        'Cash expenses',
-                        _money(_breakdown!.cashExpensesMinor, symbol),
-                      ),
-                      _row(
-                        'Supplier cash payments',
-                        _money(_breakdown!.cashSupplierPaymentsMinor, symbol),
-                      ),
-                      const Divider(),
-                    ],
-                    TextField(
-                      controller: _opening,
-                      enabled: !locked && !_saving,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                      ],
-                      decoration: InputDecoration(
-                        labelText: 'Opening cash ($symbol)',
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _counted,
-                      enabled: !locked && !_saving,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                      ],
-                      decoration: InputDecoration(
-                        labelText: 'Counted cash ($symbol)',
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _notes,
-                      enabled: !locked && !_saving,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Notes (optional)',
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _PreviewCard(
-                      openingMinor: _parseMinor(_opening.text),
-                      countedMinor: _parseMinor(_counted.text),
-                      breakdown: _breakdown,
-                      symbol: symbol,
-                      saved: _summary,
-                    ),
-                    if (locked) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        'Finalized${_summary?.finalizedAt != null ? ' · ${DateFormat.yMMMd().add_jm().format(_summary!.finalizedAt!)}' : ''}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    if (!locked) ...[
-                      Semantics(
-                        button: true,
-                        label: 'Save end of day draft',
-                        child: FilledButton(
-                          onPressed:
-                              _saving ? null : () => _save(finalize: false),
-                          child: Text(_saving ? 'Saving…' : 'Save draft'),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Semantics(
-                        button: true,
-                        label: 'Finalize end of day',
-                        child: FilledButton.tonal(
-                          onPressed:
-                              _saving ? null : () => _save(finalize: true),
-                          child: const Text('Finalize End of Day'),
-                        ),
-                      ),
-                    ] else if (canReopen) ...[
-                      Semantics(
-                        button: true,
-                        label: 'Reopen finalized end of day',
-                        child: OutlinedButton(
-                          onPressed: _saving ? null : _reopen,
-                          child: const Text('Reopen summary'),
-                        ),
-                      ),
-                    ],
-                  ],
+          ? AppErrorState(message: _error!, onRetry: _load)
+          : ListView(
+              padding: appSafeScrollPadding(context),
+              children: [
+                Text(
+                  'Only cash movements affect expected physical cash. '
+                  'Mobile Money, card and bank transfer are excluded.',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
+                const SizedBox(height: AppSpacing.md),
+                if (_breakdown != null) ...[
+                  _row(
+                    'Cash sales',
+                    _money(_breakdown!.cashSalesMinor, symbol),
+                  ),
+                  _row(
+                    'Customer cash payments',
+                    _money(_breakdown!.cashCustomerPaymentsMinor, symbol),
+                  ),
+                  _row(
+                    'Cash expenses',
+                    _money(_breakdown!.cashExpensesMinor, symbol),
+                  ),
+                  _row(
+                    'Supplier cash payments',
+                    _money(_breakdown!.cashSupplierPaymentsMinor, symbol),
+                  ),
+                  const Divider(),
+                ],
+                TextField(
+                  controller: _opening,
+                  enabled: !locked && !_saving,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: 'Opening cash ($symbol)',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _counted,
+                  enabled: !locked && !_saving,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: 'Counted cash ($symbol)',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _notes,
+                  enabled: !locked && !_saving,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _PreviewCard(
+                  openingMinor: _parseMinor(_opening.text),
+                  countedMinor: _parseMinor(_counted.text),
+                  breakdown: _breakdown,
+                  symbol: symbol,
+                  saved: _summary,
+                ),
+                if (locked) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Finalized${_summary?.finalizedAt != null ? ' · ${DateFormat.yMMMd().add_jm().format(_summary!.finalizedAt!)}' : ''}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                if (!locked) ...[
+                  Semantics(
+                    button: true,
+                    label: 'Save end of day draft',
+                    child: FilledButton(
+                      onPressed: _saving ? null : () => _save(finalize: false),
+                      child: Text(_saving ? 'Saving…' : 'Save draft'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Semantics(
+                    button: true,
+                    label: 'Finalize end of day',
+                    child: FilledButton.tonal(
+                      onPressed: _saving ? null : () => _save(finalize: true),
+                      child: const Text('Finalize End of Day'),
+                    ),
+                  ),
+                ] else if (canReopen) ...[
+                  Semantics(
+                    button: true,
+                    label: 'Reopen finalized end of day',
+                    child: OutlinedButton(
+                      onPressed: _saving ? null : _reopen,
+                      child: const Text('Reopen summary'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
     );
   }
 
@@ -387,14 +391,14 @@ class _EndOfDayScreenState extends ConsumerState<EndOfDayScreen> {
       formatCurrency(minorToMoney(minor), symbol: symbol);
 
   Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(child: Text(label)),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ],
+    ),
+  );
 }
 
 class _PreviewCard extends StatelessWidget {
@@ -437,8 +441,10 @@ class _PreviewCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Expected cash: ${money(expected)}',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              'Expected cash: ${money(expected)}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 4),
             Text('Counted cash: ${money(countedMinor)}'),
             const SizedBox(height: 4),
@@ -449,8 +455,8 @@ class _PreviewCard extends StatelessWidget {
                 color: kind == CashDifferenceKind.balanced
                     ? Colors.green.shade700
                     : kind == CashDifferenceKind.shortage
-                        ? Colors.red.shade700
-                        : Colors.orange.shade800,
+                    ? Colors.red.shade700
+                    : Colors.orange.shade800,
               ),
             ),
           ],

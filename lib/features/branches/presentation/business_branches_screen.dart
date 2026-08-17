@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
+import '../../billing/domain/billing_entitlements.dart';
+import '../../billing/presentation/billing_gate.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
@@ -18,7 +21,8 @@ class BusinessBranchesScreen extends ConsumerStatefulWidget {
       _BusinessBranchesScreenState();
 }
 
-class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen> {
+class _BusinessBranchesScreenState
+    extends ConsumerState<BusinessBranchesScreen> {
   final _searchController = TextEditingController();
 
   @override
@@ -40,14 +44,36 @@ class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen>
       );
     }
 
-    final membership = ref.watch(currentBusinessMembershipProvider).asData?.value;
-    final canManage = membership?.hasPermission(AppPermission.manageBranches) == true || membership?.isOwner == true;
+    final membership = ref
+        .watch(currentBusinessMembershipProvider)
+        .asData
+        ?.value;
+    final canManage =
+        membership?.hasPermission(AppPermission.manageBranches) == true ||
+        membership?.isOwner == true;
+    final knownBranches =
+        ref.watch(businessBranchesProvider(businessId)).asData?.value ??
+        const <BusinessBranch>[];
+    final activeBranchCount = knownBranches
+        .where((item) => item.isActive)
+        .length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Business Branches')),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
-              onPressed: () => _showBranchDialog(context, businessId),
+              onPressed: () async {
+                final allowed = await requireEntitlementCapacity(
+                  context,
+                  ref,
+                  key: BillingEntitlementKeys.branchesMax,
+                  currentUsage: activeBranchCount,
+                  featureName: 'Additional branches',
+                );
+                if (allowed && context.mounted) {
+                  await _showBranchDialog(context, businessId);
+                }
+              },
               icon: const Icon(Icons.add),
               label: const Text('Create Branch'),
             )
@@ -86,7 +112,7 @@ class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen>
                   return const Center(child: Text('No branches found.'));
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.all(AppSpacing.md),
+                  padding: appSafeScrollPadding(context),
                   itemCount: filtered.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
@@ -174,10 +200,12 @@ class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen>
   List<BusinessBranch> _filter(List<BusinessBranch> branches, String query) {
     final needle = query.trim().toLowerCase();
     if (needle.isEmpty) return branches;
-    return branches.where((branch) {
-      return branch.name.toLowerCase().contains(needle) ||
-          branch.code.toLowerCase().contains(needle);
-    }).toList(growable: false);
+    return branches
+        .where((branch) {
+          return branch.name.toLowerCase().contains(needle) ||
+              branch.code.toLowerCase().contains(needle);
+        })
+        .toList(growable: false);
   }
 
   Future<void> _toggleStatus(
@@ -193,7 +221,9 @@ class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen>
       return;
     }
     try {
-      await ref.read(businessBranchRepositoryProvider).setBranchStatus(
+      await ref
+          .read(businessBranchRepositoryProvider)
+          .setBranchStatus(
             businessId: businessId,
             branchId: branch.branchId,
             status: status,
@@ -204,9 +234,9 @@ class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen>
       final message = error is BranchException
           ? (error.message ?? 'Could not update branch.')
           : 'Could not update branch: $error';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -217,12 +247,18 @@ class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen>
   }) async {
     final nameController = TextEditingController(text: branch?.name ?? '');
     final codeController = TextEditingController(text: branch?.code ?? '');
-    final addressController = TextEditingController(text: branch?.address ?? '');
+    final addressController = TextEditingController(
+      text: branch?.address ?? '',
+    );
     final cityController = TextEditingController(text: branch?.city ?? '');
-    final countryController = TextEditingController(text: branch?.country ?? '');
+    final countryController = TextEditingController(
+      text: branch?.country ?? '',
+    );
     final phoneController = TextEditingController(text: branch?.phone ?? '');
     final emailController = TextEditingController(text: branch?.email ?? '');
-    final managerController = TextEditingController(text: branch?.managerUid ?? '');
+    final managerController = TextEditingController(
+      text: branch?.managerUid ?? '',
+    );
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -318,9 +354,9 @@ class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen>
       final message = error is BranchException
           ? (error.message ?? 'Could not save branch.')
           : 'Could not save branch: $error';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -345,10 +381,8 @@ class _BusinessBranchesScreenState extends ConsumerState<BusinessBranchesScreen>
             if ((branch.city ?? '').isNotEmpty) Text('City: ${branch.city}'),
             if ((branch.country ?? '').isNotEmpty)
               Text('Country: ${branch.country}'),
-            if ((branch.phone ?? '').isNotEmpty)
-              Text('Phone: ${branch.phone}'),
-            if ((branch.email ?? '').isNotEmpty)
-              Text('Email: ${branch.email}'),
+            if ((branch.phone ?? '').isNotEmpty) Text('Phone: ${branch.phone}'),
+            if ((branch.email ?? '').isNotEmpty) Text('Email: ${branch.email}'),
           ],
         ),
         actions: [

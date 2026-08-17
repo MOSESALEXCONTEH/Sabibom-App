@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
@@ -17,7 +18,10 @@ class ReleaseReadinessScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final membership = ref.watch(currentBusinessMembershipProvider).asData?.value;
+    final membership = ref
+        .watch(currentBusinessMembershipProvider)
+        .asData
+        ?.value;
     final isOwner = membership?.isOwner == true;
     final canEdit = ref.watch(
       hasPermissionProvider(AppPermission.editBusinessSettings),
@@ -40,7 +44,7 @@ class ReleaseReadinessScreen extends ConsumerWidget {
         builder: (context, snap) {
           final info = snap.data;
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: [
               _row('App version', info == null ? '…' : info.version),
               _row('Build number', info == null ? '…' : info.buildNumber),
@@ -56,10 +60,7 @@ class ReleaseReadinessScreen extends ConsumerWidget {
                     : 'Signed in',
               ),
               _row('Active business', businessLabel),
-              _row(
-                'Package',
-                info?.packageName ?? 'com.sabibom.app',
-              ),
+              _row('Package', info?.packageName ?? 'com.sabibom.app'),
               const SizedBox(height: AppSpacing.md),
               Text(
                 'This screen never shows tokens, API keys or private keys. '

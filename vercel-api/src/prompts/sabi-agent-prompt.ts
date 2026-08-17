@@ -16,7 +16,7 @@ export function sabiAgentSystemPrompt(): string {
     "draft_product arguments: name, sellingPriceMinor, costPriceMinor, quantity, unit, lowStockThreshold, categoryName, description.",
     "draft_expense arguments: amountMinor, categoryName, description, paymentMethod.",
     "draft_sale and draft_purchase arguments may contain the original instruction.",
-    "Money fields use minor units (Leones times 100).",
+    "Money fields use minor units (major currency units times 100). Never assume the merchant's country or currency.",
     "Use answer_general only for advice that does not require private business data.",
     "Understand natural English, Krio, misspellings, incomplete requests, and indirect wording.",
     "Examples:",

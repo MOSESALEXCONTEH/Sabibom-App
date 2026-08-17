@@ -11,6 +11,7 @@ import '../../../core/services/image_compression_service.dart';
 import '../../../core/sync/offline_mutation_queue.dart';
 import '../../../core/sync/pending_media_store.dart';
 import '../../../core/widgets/app_network_image.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../business_profile/services/pinata_upload_service.dart';
 import '../../dashboard/application/dashboard_providers.dart';
@@ -142,7 +143,12 @@ class _CustomerFormScaffoldState extends ConsumerState<_CustomerFormScaffold> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            padding: appSafeScrollPadding(
+              context,
+              left: 20,
+              top: 12,
+              right: 20,
+            ),
             children: <Widget>[
               Center(
                 child: Stack(

@@ -15,7 +15,10 @@ class SubscriptionPlan {
     required this.price,
     required this.billingInterval,
     required this.features,
+    required this.limits,
     required this.trialDays,
+    required this.tier,
+    required this.googlePlayProductId,
   });
 
   factory SubscriptionPlan.fromMap(String id, Map<String, dynamic> data) {
@@ -31,7 +34,14 @@ class SubscriptionPlan {
             growable: false,
           ) ??
           const <String>[],
+      limits:
+          (data['limits'] as Map?)?.map(
+            (key, value) => MapEntry(key.toString(), value),
+          ) ??
+          const <String, dynamic>{},
       trialDays: (data['trialDays'] as num?)?.toInt() ?? 0,
+      tier: data['tier'] as String? ?? '',
+      googlePlayProductId: data['googlePlayProductId'] as String? ?? '',
     );
   }
 
@@ -42,7 +52,10 @@ class SubscriptionPlan {
   final double price;
   final String billingInterval;
   final List<String> features;
+  final Map<String, dynamic> limits;
   final int trialDays;
+  final String tier;
+  final String googlePlayProductId;
 }
 
 class BusinessSubscription {
@@ -77,36 +90,19 @@ class BusinessSubscription {
   final DateTime? trialEndsAt;
 
   bool hasAccessAt(DateTime now) {
-    if (status != 'active' && status != 'trialing') return false;
-    final end = status == 'trialing'
-        ? trialEndsAt ?? currentPeriodEnd
-        : currentPeriodEnd;
+    const accessibleStatuses = <String>{
+      'active',
+      'trialing',
+      'grace_period',
+      'canceled',
+      'cancelled',
+    };
+    if (!accessibleStatuses.contains(status)) return false;
+    final end = accessEnd;
+    if (status == 'canceled' && end == null) return false;
     return end == null || end.isAfter(now);
   }
-}
 
-class BusinessAccess {
-  const BusinessAccess({
-    required this.allowed,
-    required this.isLegacyGrace,
-    this.subscription,
-  });
-
-  factory BusinessAccess.fromSubscription(
-    BusinessSubscription? subscription, {
-    DateTime? now,
-  }) {
-    if (subscription == null) {
-      return const BusinessAccess(allowed: true, isLegacyGrace: true);
-    }
-    return BusinessAccess(
-      allowed: subscription.hasAccessAt(now ?? DateTime.now()),
-      isLegacyGrace: false,
-      subscription: subscription,
-    );
-  }
-
-  final bool allowed;
-  final bool isLegacyGrace;
-  final BusinessSubscription? subscription;
+  DateTime? get accessEnd =>
+      status == 'trialing' ? trialEndsAt ?? currentPeriodEnd : currentPeriodEnd;
 }

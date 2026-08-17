@@ -12,6 +12,7 @@ import {
   type SabiAgentPlan,
 } from "../../schemas/sabi-agent-schema";
 import {requireActiveBranchAccess} from "../../services/inventory/branch-inventory";
+import {consumeSabiRequest} from "../../services/billing/entitlements";
 import {
   loadMembership,
 } from "../../services/team/membership-service";
@@ -220,6 +221,7 @@ export default createHandler(
     }
 
     const db = adminFirestore();
+    await consumeSabiRequest({db, businessId, uid: identity.uid});
     let scope: AgentBranchScope;
     if (branchId === null) {
       if (!membershipHasPermission(membership, "view_combined_reports")) {

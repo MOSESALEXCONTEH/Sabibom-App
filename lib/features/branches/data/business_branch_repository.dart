@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/network/api_exception.dart';
+import '../../../core/network/authenticated_api_client.dart';
 import '../domain/business_branch.dart';
 
 class BranchException implements Exception {
@@ -54,10 +56,15 @@ abstract class BusinessBranchRepository {
 }
 
 class FirestoreBusinessBranchRepository implements BusinessBranchRepository {
-  FirestoreBusinessBranchRepository({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  FirestoreBusinessBranchRepository({
+    FirebaseFirestore? firestore,
+    AuthenticatedApiClient? apiClient,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _apiClient =
+           apiClient ?? (firestore == null ? AuthenticatedApiClient() : null);
 
   final FirebaseFirestore _firestore;
+  final AuthenticatedApiClient? _apiClient;
 
   DocumentReference<Map<String, dynamic>> _business(String businessId) =>
       _firestore.collection('businesses').doc(businessId);
@@ -303,6 +310,37 @@ class FirestoreBusinessBranchRepository implements BusinessBranchRepository {
       businessId,
       managerUid,
     );
+    final apiClient = _apiClient;
+    if (apiClient != null) {
+      try {
+        final response = await apiClient.postJson(
+          '/api/team/create-branch',
+          body: {
+            'businessId': businessId,
+            'name': name.trim(),
+            'code': normalizedCode,
+            if (address?.trim().isNotEmpty == true) 'address': address!.trim(),
+            if (city?.trim().isNotEmpty == true) 'city': city!.trim(),
+            if (country?.trim().isNotEmpty == true) 'country': country!.trim(),
+            if (phone?.trim().isNotEmpty == true) 'phone': phone!.trim(),
+            if (email?.trim().isNotEmpty == true) 'email': email!.trim(),
+            'managerUid': ?normalizedManagerUid,
+          },
+        );
+        return BusinessBranch.fromMap(
+          response,
+          response['branchId'] as String,
+          businessId,
+        );
+      } on ApiException catch (error) {
+        throw BranchException(
+          error.code ?? 'api-error',
+          message: error.message,
+        );
+      }
+    }
+
+    // Explicit Firestore injection is retained for repository unit tests only.
     final ref = _branches(businessId).doc();
     final branch = BusinessBranch(
       branchId: ref.id,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../auth/application/user_profile_provider.dart';
 
 /// Account profile for the signed-in user.
@@ -40,7 +41,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: appSafeScrollPadding(context),
         children: <Widget>[
           Text(
             'Your personal account details. Business details are managed under '
@@ -59,7 +60,8 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             readOnly: true,
             decoration: const InputDecoration(
               labelText: 'Email',
-              helperText: 'Email is managed from Security if you use password sign-in.',
+              helperText:
+                  'Email is managed from Security if you use password sign-in.',
             ),
           ),
           if (profile?.businessName != null) ...<Widget>[
@@ -93,9 +95,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     if (user == null) return;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your full name.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter your full name.')));
       return;
     }
     setState(() => _saving = true);
@@ -109,9 +111,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         SetOptions(merge: true),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

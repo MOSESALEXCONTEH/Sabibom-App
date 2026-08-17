@@ -5,11 +5,30 @@ import 'package:sabibom/features/business_setup/domain/business_operating_model.
 import 'package:sabibom/features/business_setup/domain/receipt_settings.dart';
 
 void main() {
-  test('defaults Sierra Leone currency', () {
+  test('defaults to a globally supported device currency and UTC timezone', () {
     final data = BusinessSetupData.initial();
-    expect(data.currency.code, 'SLE');
-    expect(data.currency.name, 'Sierra Leonean Leone');
-    expect(data.currency.symbol, 'Le');
+    expect(
+      CurrencyConfig.supported.map((currency) => currency.code),
+      contains(data.currency.code),
+    );
+    expect(data.timezone, 'UTC');
+    expect(BusinessSetupData.timezones, contains('Africa/Freetown'));
+    expect(BusinessSetupData.timezones, contains('America/New_York'));
+  });
+
+  test('business persists selected global currency and timezone', () {
+    final data = BusinessSetupData.initial().copyWith(
+      currency: CurrencyConfig.usd,
+      timezone: 'America/New_York',
+    );
+    final business = Business.fromSetupData(
+      businessId: 'business-1',
+      ownerId: 'owner-1',
+      data: data,
+    );
+
+    expect(business.toMap()['currencyCode'], 'USD');
+    expect(business.toMap()['timezone'], 'America/New_York');
   });
 
   test('receipt settings defaults are applied', () {

@@ -13,6 +13,7 @@ class FinancialSettingsStep extends StatelessWidget {
   final BusinessSetupData data;
   final void Function({
     CurrencyConfig? currency,
+    String? timezone,
     bool? taxEnabled,
     double? taxPercentage,
     String? financialYearStartMonth,
@@ -29,22 +30,44 @@ class FinancialSettingsStep extends StatelessWidget {
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: AppSpacing.md),
-        TextFormField(
+        DropdownButtonFormField<String>(
           initialValue: data.currency.code,
-          readOnly: true,
-          decoration: const InputDecoration(labelText: 'Currency code'),
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Business currency'),
+          items: CurrencyConfig.supported
+              .map(
+                (currency) => DropdownMenuItem(
+                  value: currency.code,
+                  child: Text(
+                    '${currency.code} (${currency.symbol}) - ${currency.name}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (code) {
+            if (code == null) return;
+            onChanged(
+              currency: CurrencyConfig.supported.firstWhere(
+                (currency) => currency.code == code,
+              ),
+            );
+          },
         ),
         const SizedBox(height: AppSpacing.md),
-        TextFormField(
-          initialValue: data.currency.name,
-          readOnly: true,
-          decoration: const InputDecoration(labelText: 'Currency name'),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        TextFormField(
-          initialValue: data.currency.symbol,
-          readOnly: true,
-          decoration: const InputDecoration(labelText: 'Currency symbol'),
+        DropdownButtonFormField<String>(
+          initialValue: data.timezone,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Business timezone'),
+          items: BusinessSetupData.timezones
+              .map(
+                (timezone) => DropdownMenuItem(
+                  value: timezone,
+                  child: Text(timezone, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (timezone) => onChanged(timezone: timezone),
         ),
         const SizedBox(height: AppSpacing.md),
         SwitchListTile.adaptive(

@@ -18,7 +18,14 @@ import {errors} from "../../../utils/api-errors";
 import {sendSuccess} from "../../../utils/api-response";
 import {createHandler, readJsonBody} from "../../../utils/handler";
 
-const createProductSchema = z.object({
+const initialStockExpiryDateSchema = z
+  .string()
+  .trim()
+  .refine((value) => !Number.isNaN(Date.parse(value)), {
+    message: "Invalid expiry date.",
+  });
+
+export const createProductSchema = z.object({
   businessId: businessIdSchema,
   branchId: z.string().trim().min(1).max(128),
   productId: z.string().uuid(),
@@ -36,8 +43,10 @@ const createProductSchema = z.object({
   status: z.enum(["active", "archived"]).default("active"),
   tracksExpiry: z.boolean().default(false),
   defaultExpiryReminderDays: z.number().int().min(0).max(365).default(30),
-  initialStockExpiryDate: z.string().datetime().nullish(),
+  initialStockExpiryDate: initialStockExpiryDateSchema.nullish(),
   initialStockExpiryDateKnown: z.boolean().default(false),
+  imageUrl: z.string().trim().url().max(2048).nullish(),
+  imageCid: z.string().trim().max(160).nullish(),
 });
 
 export default createHandler(
@@ -139,7 +148,8 @@ export default createHandler(
           : 0,
         trackStock: data.trackStock,
         unit: data.unit,
-        imageUrl: null,
+        imageUrl: data.imageUrl || null,
+        imageCid: data.imageCid || null,
         status: data.status,
         tracksExpiry: data.tracksExpiry,
         defaultExpiryReminderDays: data.defaultExpiryReminderDays,

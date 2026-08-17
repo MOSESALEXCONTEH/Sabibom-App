@@ -229,7 +229,10 @@ class FirestoreSuppliersRepository implements SuppliersRepository {
 
     await _firestore.runTransaction((tx) async {
       final snapshot = await tx.get(supplierRef);
+      final businessSnapshot = await tx.get(business);
       if (!snapshot.exists) throw const SupplierException('not-found');
+      final currencyCode =
+          businessSnapshot.data()?['currencyCode'] as String? ?? 'SLE';
       final supplier = Supplier.fromFirestore(snapshot);
       if (amountMinor > supplier.balanceMinor) {
         throw const SupplierException(
@@ -270,7 +273,7 @@ class FirestoreSuppliersRepository implements SuppliersRepository {
         'subtitle': supplier.name,
         'amountMinor': amountMinor,
         'amount': minorToMoney(amountMinor),
-        'currencyCode': 'SLE',
+        'currencyCode': currencyCode,
         'referenceId': supplier.id,
         'createdBy': user.uid,
         'createdByName': user.displayName ?? user.email,

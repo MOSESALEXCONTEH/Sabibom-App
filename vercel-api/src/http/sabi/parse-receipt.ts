@@ -1,4 +1,5 @@
 import type {VercelRequest, VercelResponse} from "@vercel/node";
+import {adminFirestore} from "../../config/firebase-admin";
 import {authenticateRequest} from "../../middleware/authenticate-request";
 import {enforceRateLimit} from "../../middleware/rate-limit";
 import {receiptCommandSystemPrompt} from "../../prompts/receipt-command-prompt";
@@ -7,6 +8,7 @@ import {
   sabiCommandResponseSchema,
 } from "../../schemas/sabi-command-schema";
 import {requireBusinessAccess} from "../../services/business-access-service";
+import {consumeSabiRequest} from "../../services/billing/entitlements";
 import {groqChatJson} from "../../services/groq-service";
 import {errors} from "../../utils/api-errors";
 import {sendSuccess} from "../../utils/api-response";
@@ -29,6 +31,11 @@ export default createHandler(["POST"], async (req: VercelRequest, res: VercelRes
     uid: identity.uid,
     businessId,
     requiredPermission: "use_sabi",
+  });
+  await consumeSabiRequest({
+    db: adminFirestore(),
+    businessId,
+    uid: identity.uid,
   });
 
   await enforceRateLimit({

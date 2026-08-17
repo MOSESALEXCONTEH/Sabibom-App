@@ -12,12 +12,7 @@ enum ProductProfitSort {
   quantitySoldDesc,
 }
 
-enum ExpiryReportSort {
-  expiryDateAsc,
-  expiredFirst,
-  nameAsc,
-  quantityDesc,
-}
+enum ExpiryReportSort { expiryDateAsc, expiredFirst, nameAsc, quantityDesc }
 
 /// One product row for the Product Profit report.
 class ProductProfitRow {
@@ -125,7 +120,8 @@ class ProductProfitReport {
                 (product.quantity * product.costPriceMinor).round());
       // Period realized comes from sale snapshots when present; otherwise fall
       // back to the product's all-time counter for an empty period view.
-      final realized = agg?.realizedGrossProfitMinor ??
+      final realized =
+          agg?.realizedGrossProfitMinor ??
           (sales.isEmpty ? product.realizedGrossProfitMinor : 0);
       final estimated =
           (agg?.profitIsEstimated ?? false) || product.profitIsEstimated;
@@ -263,12 +259,10 @@ class ExpiryReportRow {
   final String sourceType;
   final String? sourceNumber;
 
-  int get costValueMinor =>
-      (quantityRemaining * unitCostMinor).round();
+  int get costValueMinor => (quantityRemaining * unitCostMinor).round();
   int get potentialRevenueMinor =>
       (quantityRemaining * sellingPriceMinor).round();
-  int get potentialProfitLossMinor =>
-      potentialRevenueMinor - costValueMinor;
+  int get potentialProfitLossMinor => potentialRevenueMinor - costValueMinor;
 }
 
 class ProductExpiryReport {
@@ -338,10 +332,9 @@ class ProductExpiryReport {
           expiryDate: batch.expiryDate!,
           now: now,
           businessTimezone: businessTimezone,
-          reminderThresholdDays:
-              product.defaultExpiryReminderDays > 0
-                  ? product.defaultExpiryReminderDays
-                  : reminderThresholdDays,
+          reminderThresholdDays: product.defaultExpiryReminderDays > 0
+              ? product.defaultExpiryReminderDays
+              : reminderThresholdDays,
         );
       }
 
@@ -371,10 +364,7 @@ class ProductExpiryReport {
       _sortExpiryRows(list, sort);
     }
 
-    ExpiryReportSection section(
-      ProductExpiryStatus status,
-      String title,
-    ) {
+    ExpiryReportSection section(ProductExpiryStatus status, String title) {
       final rows = buckets[status] ?? const <ExpiryReportRow>[];
       return ExpiryReportSection(
         status: status,
@@ -454,13 +444,12 @@ class ProductExpiryReport {
         });
       case ExpiryReportSort.nameAsc:
         rows.sort(
-          (a, b) =>
-              a.productName.toLowerCase().compareTo(b.productName.toLowerCase()),
+          (a, b) => a.productName.toLowerCase().compareTo(
+            b.productName.toLowerCase(),
+          ),
         );
       case ExpiryReportSort.quantityDesc:
-        rows.sort(
-          (a, b) => b.quantityRemaining.compareTo(a.quantityRemaining),
-        );
+        rows.sort((a, b) => b.quantityRemaining.compareTo(a.quantityRemaining));
     }
   }
 }

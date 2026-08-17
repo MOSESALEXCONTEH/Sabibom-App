@@ -2,52 +2,67 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sabibom/features/billing/domain/billing_models.dart';
 
 void main() {
-  group('BusinessAccess', () {
-    final now = DateTime(2026, 8, 5, 12);
-
-    test('preserves access for businesses not migrated to billing yet', () {
-      final access = BusinessAccess.fromSubscription(null, now: now);
-      expect(access.allowed, isTrue);
-      expect(access.isLegacyGrace, isTrue);
+  test('SubscriptionPlan reads its entitlement limits', () {
+    final plan = SubscriptionPlan.fromMap('free', <String, dynamic>{
+      'name': 'Free',
+      'limits': <String, dynamic>{'branches.max': 1, 'reports.export': false},
+      'googlePlayProductId': 'sabibom_pro_monthly',
     });
 
-    test('allows active complimentary access before its end date', () {
-      final access = BusinessAccess.fromSubscription(
-        BusinessSubscription(
-          businessId: 'business-1',
-          planId: 'plan-1',
-          status: 'active',
-          accessType: 'complimentary',
-          currentPeriodEnd: now.add(const Duration(days: 30)),
-        ),
-        now: now,
+    expect(plan.limits['branches.max'], 1);
+    expect(plan.limits['reports.export'], isFalse);
+    expect(plan.googlePlayProductId, 'sabibom_pro_monthly');
+  });
+
+  group('BusinessSubscription', () {
+    final now = DateTime(2026, 8, 5, 12);
+
+    test('allows active access before its end date', () {
+      final subscription = BusinessSubscription(
+        businessId: 'business-1',
+        planId: 'plan-1',
+        status: 'active',
+        accessType: 'complimentary',
+        currentPeriodEnd: now.add(const Duration(days: 30)),
       );
-      expect(access.allowed, isTrue);
-      expect(access.isLegacyGrace, isFalse);
+      expect(subscription.hasAccessAt(now), isTrue);
     });
 
     test('blocks expired and paused subscriptions', () {
-      final expired = BusinessAccess.fromSubscription(
-        BusinessSubscription(
-          businessId: 'business-1',
-          planId: 'plan-1',
-          status: 'active',
-          accessType: 'paid',
-          currentPeriodEnd: now.subtract(const Duration(seconds: 1)),
-        ),
-        now: now,
+      final expired = BusinessSubscription(
+        businessId: 'business-1',
+        planId: 'plan-1',
+        status: 'active',
+        accessType: 'paid',
+        currentPeriodEnd: now.subtract(const Duration(seconds: 1)),
       );
-      final paused = BusinessAccess.fromSubscription(
-        const BusinessSubscription(
-          businessId: 'business-1',
-          planId: 'plan-1',
-          status: 'paused',
-          accessType: 'paid',
-        ),
-        now: now,
+      const paused = BusinessSubscription(
+        businessId: 'business-1',
+        planId: 'plan-1',
+        status: 'paused',
+        accessType: 'paid',
       );
-      expect(expired.allowed, isFalse);
-      expect(paused.allowed, isFalse);
+      expect(expired.hasAccessAt(now), isFalse);
+      expect(paused.hasAccessAt(now), isFalse);
+    });
+
+    test('canceled subscription remains active only until period end', () {
+      final current = BusinessSubscription(
+        businessId: 'business-1',
+        planId: 'plan-1',
+        status: 'canceled',
+        accessType: 'paid',
+        currentPeriodEnd: now.add(const Duration(days: 2)),
+      );
+      const missingEnd = BusinessSubscription(
+        businessId: 'business-1',
+        planId: 'plan-1',
+        status: 'canceled',
+        accessType: 'paid',
+      );
+
+      expect(current.hasAccessAt(now), isTrue);
+      expect(missingEnd.hasAccessAt(now), isFalse);
     });
   });
 }

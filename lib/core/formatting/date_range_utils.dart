@@ -44,6 +44,28 @@ DateRange dashboardDateRange(DashboardPeriod period, {DateTime? now}) {
   };
 }
 
+DateRange previousDashboardDateRange(DashboardPeriod period, {DateTime? now}) {
+  final current = dashboardDateRange(period, now: now);
+  return switch (period) {
+    DashboardPeriod.today => DateRange(
+      start: current.start.subtract(const Duration(days: 1)),
+      end: current.start,
+    ),
+    DashboardPeriod.week => DateRange(
+      start: current.start.subtract(const Duration(days: 7)),
+      end: current.start,
+    ),
+    DashboardPeriod.month => DateRange(
+      start: DateTime(current.start.year, current.start.month - 1),
+      end: current.start,
+    ),
+    DashboardPeriod.year => DateRange(
+      start: DateTime(current.start.year - 1),
+      end: current.start,
+    ),
+  };
+}
+
 DateRange _weekRange(DateTime today) {
   final monday = today.subtract(
     Duration(days: today.weekday - DateTime.monday),

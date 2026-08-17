@@ -46,6 +46,10 @@
     {
       "source": "/api/approvals/:action",
       "destination": "/api/approvals?action=:action"
+    },
+    {
+      "source": "/api/billing/:action",
+      "destination": "/api/billing?action=:action"
     }
   ]
 }

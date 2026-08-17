@@ -11,11 +11,9 @@ import '../domain/end_of_day_summary.dart';
 export '../domain/end_of_day_summary.dart';
 
 class EndOfDayRepository {
-  EndOfDayRepository({
-    FirebaseFirestore? firestore,
-    FirebaseAuth? auth,
-  })  : _db = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+  EndOfDayRepository({FirebaseFirestore? firestore, FirebaseAuth? auth})
+    : _db = firestore ?? FirebaseFirestore.instance,
+      _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
@@ -60,7 +58,9 @@ class EndOfDayRepository {
           .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
           .where('createdAt', isLessThan: Timestamp.fromDate(end))
           .get()
-          .catchError((_) => business.collection('supplier_payments').limit(0).get()),
+          .catchError(
+            (_) => business.collection('supplier_payments').limit(0).get(),
+          ),
     ]);
 
     var cashSales = 0;
@@ -106,7 +106,8 @@ class EndOfDayRepository {
         if (type != 'payment' && type != 'customer_payment') continue;
         final method = '${data['paymentMethod'] ?? 'cash'}'.toLowerCase();
         if (method != 'cash') continue;
-        cashCustomer += (data['creditMinor'] as num?)?.toInt() ??
+        cashCustomer +=
+            (data['creditMinor'] as num?)?.toInt() ??
             (data['amountMinor'] as num?)?.toInt() ??
             0;
       }
@@ -164,12 +165,17 @@ class EndOfDayRepository {
       throw StateError('Today’s End of Day is already finalized.');
     }
 
-    await _col(businessId).doc(dateKey).set({
-      ...summary.toMap(),
-      'createdAt': existing?.createdAt == null
-          ? FieldValue.serverTimestamp()
-          : null,
-    }..removeWhere((k, v) => v == null), SetOptions(merge: true));
+    await _col(businessId)
+        .doc(dateKey)
+        .set(
+          {
+            ...summary.toMap(),
+            'createdAt': existing?.createdAt == null
+                ? FieldValue.serverTimestamp()
+                : null,
+          }..removeWhere((k, v) => v == null),
+          SetOptions(merge: true),
+        );
 
     await _syncDailySummary(businessId, dateKey, summary);
     return summary;
@@ -269,10 +275,10 @@ class EndOfDayRepository {
         .collection('daily_summaries')
         .doc(dateKey)
         .set({
-      'endOfDayStatus': summary.status.storedValue,
-      'cashDifferenceMinor': summary.differenceMinor,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+          'endOfDayStatus': summary.status.storedValue,
+          'cashDifferenceMinor': summary.differenceMinor,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
   }
 }
 

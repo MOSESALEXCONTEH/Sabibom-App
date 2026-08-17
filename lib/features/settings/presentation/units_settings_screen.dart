@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../auth/application/user_profile_provider.dart';
 import '../../products/domain/product.dart';
 
@@ -11,7 +12,8 @@ class UnitsSettingsScreen extends ConsumerStatefulWidget {
   const UnitsSettingsScreen({super.key});
 
   @override
-  ConsumerState<UnitsSettingsScreen> createState() => _UnitsSettingsScreenState();
+  ConsumerState<UnitsSettingsScreen> createState() =>
+      _UnitsSettingsScreenState();
 }
 
 class _UnitsSettingsScreenState extends ConsumerState<UnitsSettingsScreen> {
@@ -26,8 +28,11 @@ class _UnitsSettingsScreenState extends ConsumerState<UnitsSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final businessId =
-        ref.watch(currentUserProfileProvider).asData?.value?.activeBusinessId;
+    final businessId = ref
+        .watch(currentUserProfileProvider)
+        .asData
+        ?.value
+        ?.activeBusinessId;
     if (businessId == null || businessId.isEmpty) {
       return const Scaffold(
         body: Center(child: Text('No business has been set up yet.')),
@@ -44,7 +49,7 @@ class _UnitsSettingsScreenState extends ConsumerState<UnitsSettingsScreen> {
         builder: (context, snapshot) {
           final custom = _stringList(snapshot.data?.data()?['customUnits']);
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: <Widget>[
               Text(
                 'Units describe how you sell items (piece, pack, litre, and more). '
@@ -54,9 +59,9 @@ class _UnitsSettingsScreenState extends ConsumerState<UnitsSettingsScreen> {
               const SizedBox(height: AppSpacing.lg),
               Text(
                 'Standard units',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.sm),
               Wrap(
@@ -70,9 +75,9 @@ class _UnitsSettingsScreenState extends ConsumerState<UnitsSettingsScreen> {
               const SizedBox(height: AppSpacing.lg),
               Text(
                 'Custom units',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.sm),
               Row(
@@ -130,7 +135,8 @@ class _UnitsSettingsScreenState extends ConsumerState<UnitsSettingsScreen> {
   Future<void> _add(String businessId, List<String> current) async {
     final unit = _controller.text.trim();
     if (unit.isEmpty) return;
-    final exists = current.any((u) => u.toLowerCase() == unit.toLowerCase()) ||
+    final exists =
+        current.any((u) => u.toLowerCase() == unit.toLowerCase()) ||
         productUnits.any((u) => u.toLowerCase() == unit.toLowerCase());
     if (exists) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -141,13 +147,13 @@ class _UnitsSettingsScreenState extends ConsumerState<UnitsSettingsScreen> {
     setState(() => _saving = true);
     try {
       final next = [...current, unit]..sort();
-      await FirebaseFirestore.instance.collection('businesses').doc(businessId).set(
-        <String, Object?>{
-          'customUnits': next,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .set(<String, Object?>{
+            'customUnits': next,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       _controller.clear();
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -162,13 +168,13 @@ class _UnitsSettingsScreenState extends ConsumerState<UnitsSettingsScreen> {
     setState(() => _saving = true);
     try {
       final next = current.where((u) => u != unit).toList(growable: false);
-      await FirebaseFirestore.instance.collection('businesses').doc(businessId).set(
-        <String, Object?>{
-          'customUnits': next,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .set(<String, Object?>{
+            'customUnits': next,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

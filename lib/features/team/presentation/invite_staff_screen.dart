@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../billing/domain/billing_entitlements.dart';
+import '../../billing/presentation/billing_gate.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../application/team_providers.dart';
 import '../domain/app_permission.dart';
@@ -89,6 +91,27 @@ class _InviteStaffScreenState extends ConsumerState<InviteStaffScreen> {
       setState(() => _error = TeamException.existingMember.message);
       return;
     }
+    final pendingInvitations =
+        ref
+            .read(teamInvitationsProvider)
+            .asData
+            ?.value
+            .where((invitation) => invitation.status.name == 'pending')
+            .length ??
+        0;
+    final activeStaff = members
+        .where(
+          (member) => member.status == MemberStatus.active && !member.isOwner,
+        )
+        .length;
+    final hasCapacity = await requireEntitlementCapacity(
+      context,
+      ref,
+      key: BillingEntitlementKeys.staffMax,
+      currentUsage: activeStaff + pendingInvitations,
+      featureName: 'Additional staff accounts',
+    );
+    if (!hasCapacity || !mounted) return;
 
     setState(() {
       _saving = true;
@@ -103,7 +126,8 @@ class _InviteStaffScreenState extends ConsumerState<InviteStaffScreen> {
         businessId: businessId,
         businessName: business.business.name,
         invitedBy: uid,
-        invitedByName: actor?.effectiveDisplayName ??
+        invitedByName:
+            actor?.effectiveDisplayName ??
             me?.displayName ??
             me?.email ??
             'Owner',
@@ -112,7 +136,9 @@ class _InviteStaffScreenState extends ConsumerState<InviteStaffScreen> {
         permissions: permissions,
         email: _contactIsEmail ? contact : null,
         phone: _contactIsEmail ? null : contact,
-        displayName: _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
+        displayName: _nameCtrl.text.trim().isEmpty
+            ? null
+            : _nameCtrl.text.trim(),
         message: _messageCtrl.text.trim().isEmpty
             ? null
             : _messageCtrl.text.trim(),
@@ -154,7 +180,8 @@ class _InviteStaffScreenState extends ConsumerState<InviteStaffScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final roles = ref.watch(teamRolesProvider).asData?.value ??
+    final roles =
+        ref.watch(teamRolesProvider).asData?.value ??
         SystemRoles.buildDefaults(ref.watch(teamBusinessIdProvider) ?? '');
 
     return TeamBusinessGate(
@@ -190,11 +217,11 @@ class _InviteStaffScreenState extends ConsumerState<InviteStaffScreen> {
                   border: OutlineInputBorder(),
                 ),
                 items: [
-                  ...roles.where((r) => r.isActive && r.id != SystemRoleIds.owner).map(
-                        (r) => DropdownMenuItem(
-                          value: r.id,
-                          child: Text(r.name),
-                        ),
+                  ...roles
+                      .where((r) => r.isActive && r.id != SystemRoleIds.owner)
+                      .map(
+                        (r) =>
+                            DropdownMenuItem(value: r.id, child: Text(r.name)),
                       ),
                 ],
                 onChanged: (v) {
@@ -230,10 +257,9 @@ class _InviteStaffScreenState extends ConsumerState<InviteStaffScreen> {
               const SizedBox(height: AppSpacing.md),
               Text(
                 'Permission preview',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
               Text('${_previewPermissions.length} permissions for this role'),
               const SizedBox(height: AppSpacing.sm),
@@ -300,10 +326,9 @@ class _InviteShareSheet extends StatelessWidget {
         children: [
           Text(
             'Invitation ready',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.sm),
           const Text(
@@ -328,9 +353,7 @@ class _InviteShareSheet extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(
-            onPressed: () => SharePlus.instance.share(
-              ShareParams(text: text),
-            ),
+            onPressed: () => SharePlus.instance.share(ShareParams(text: text)),
             icon: const Icon(Icons.share),
             label: const Text('Share'),
           ),

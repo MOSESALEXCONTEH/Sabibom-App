@@ -9,6 +9,7 @@ import '../../../app/router.dart';
 import '../../../core/services/image_compression_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../business_profile/services/pinata_upload_service.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../setup/application/setup_providers.dart';
@@ -23,7 +24,7 @@ class HelpHomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Help and Feedback')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: appSafeScrollPadding(context),
         children: [
           Text(
             'Get answers, send feedback, or report a problem. Basic help works offline.',
@@ -182,7 +183,7 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
           ),
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: appSafeScrollPadding(context),
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
@@ -221,7 +222,7 @@ class HelpContactScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Contact')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: appSafeScrollPadding(context),
         children: const [
           Text(
             'Email support with your business name, the screen you were on, '
@@ -284,15 +285,13 @@ class _HelpFeedbackScreenState extends ConsumerState<HelpFeedbackScreen> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: appSafeScrollPadding(context),
         children: [
           DropdownButtonFormField<FeedbackCategory>(
             initialValue: _category,
             decoration: const InputDecoration(labelText: 'Category'),
             items: FeedbackCategory.values
-                .map(
-                  (c) => DropdownMenuItem(value: c, child: Text(c.label)),
-                )
+                .map((c) => DropdownMenuItem(value: c, child: Text(c.label)))
                 .toList(),
             onChanged: (v) {
               if (v != null) setState(() => _category = v);
@@ -325,7 +324,9 @@ class _HelpFeedbackScreenState extends ConsumerState<HelpFeedbackScreen> {
           OutlinedButton.icon(
             onPressed: _pickImage,
             icon: const Icon(Icons.image_outlined),
-            label: Text(_image == null ? 'Add screenshot' : 'Change screenshot'),
+            label: Text(
+              _image == null ? 'Add screenshot' : 'Change screenshot',
+            ),
           ),
           if (_image != null) ...[
             const SizedBox(height: 8),
@@ -369,17 +370,16 @@ class _HelpFeedbackScreenState extends ConsumerState<HelpFeedbackScreen> {
     if (uid == null) return;
     if (_title.text.trim().length < 3 || _description.text.trim().length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a clear title and description.'),
-        ),
+        const SnackBar(content: Text('Enter a clear title and description.')),
       );
       return;
     }
     setState(() => _submitting = true);
     try {
       final active = ref.read(activeBusinessProvider).asData?.value;
-      final businessId =
-          active is ActiveBusinessData ? active.business.businessId : null;
+      final businessId = active is ActiveBusinessData
+          ? active.business.businessId
+          : null;
       String? attachmentUrl;
       String? attachmentCid;
       var screenshotNote = '';
@@ -392,11 +392,12 @@ class _HelpFeedbackScreenState extends ConsumerState<HelpFeedbackScreen> {
               fileName: _image!.name,
               mimeType: _image!.mimeType,
             );
-            final uploaded =
-                await ref.read(pinataUploadServiceProvider).uploadFeedbackAttachment(
-                      businessId: businessId,
-                      image: compressed,
-                    );
+            final uploaded = await ref
+                .read(pinataUploadServiceProvider)
+                .uploadFeedbackAttachment(
+                  businessId: businessId,
+                  image: compressed,
+                );
             attachmentUrl = uploaded.logoUrl;
             attachmentCid = uploaded.cid;
           } catch (_) {
@@ -427,8 +428,8 @@ class _HelpFeedbackScreenState extends ConsumerState<HelpFeedbackScreen> {
       if (!mounted) return;
       final detail = error is FirebaseException
           ? (error.message?.trim().isNotEmpty == true
-              ? error.message!
-              : error.code)
+                ? error.message!
+                : error.code)
           : error.toString();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not send feedback: $detail')),
@@ -453,13 +454,13 @@ class AboutSabiBomScreen extends StatelessWidget {
               ? '…'
               : 'Version ${snap.data!.version} (${snap.data!.buildNumber})';
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: [
               Text(
                 'SabiBom',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 8),
               Text(version),

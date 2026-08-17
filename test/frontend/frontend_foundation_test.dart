@@ -136,6 +136,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('product inventory row fits a compact phone', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const product = Product(
+      id: 'product-compact',
+      businessId: 'business-1',
+      name: 'Extra long imported premium biscuit package',
+      categoryName: 'Food and beverages',
+      sku: 'SKU-2026-VERY-LONG',
+      sellingPriceMinor: 987654321,
+      costPriceMinor: 500,
+      quantity: 123456,
+      lowStockThreshold: 5,
+      trackStock: true,
+      unit: 'Cartons',
+      status: ProductStatus.active,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SabiBomTheme.dark,
+        home: Scaffold(
+          body: ProductListTile(
+            product: product,
+            currencySymbol: 'Le',
+            showProfit: true,
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('Extra long imported'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test(
     'products screen remains constructible after adaptive catalog changes',
     () {

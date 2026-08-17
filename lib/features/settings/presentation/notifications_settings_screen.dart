@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../notifications/data/notifications_repository.dart';
 import '../../notifications/data/push_notification_bootstrap.dart';
@@ -51,6 +52,10 @@ class _NotificationsSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final activeBusiness = ref.watch(activeBusinessProvider).asData?.value;
+    final currencySymbol = activeBusiness is ActiveBusinessData
+        ? activeBusiness.business.currency.symbol
+        : null;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       return const Scaffold(
@@ -104,7 +109,7 @@ class _NotificationsSettingsScreenState
       child: Scaffold(
         appBar: AppBar(title: const Text('Notifications')),
         body: ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: appSafeScrollPadding(context),
           children: [
             Text(
               'Choose which alerts you want. Preferences save only when you tap Save.',
@@ -170,7 +175,10 @@ class _NotificationsSettingsScreenState
               contentPadding: EdgeInsets.zero,
               title: const Text('Minimum balance to alert'),
               subtitle: Text(
-                formatCurrency(_draft.customerDebtMinimumMinor / 100),
+                formatCurrency(
+                  _draft.customerDebtMinimumMinor / 100,
+                  symbol: currencySymbol ?? 'Le',
+                ),
               ),
               trailing: const Icon(Icons.edit_outlined),
               onTap: () => _editMinor(
@@ -193,7 +201,10 @@ class _NotificationsSettingsScreenState
               contentPadding: EdgeInsets.zero,
               title: const Text('Minimum supplier balance'),
               subtitle: Text(
-                formatCurrency(_draft.supplierDebtMinimumMinor / 100),
+                formatCurrency(
+                  _draft.supplierDebtMinimumMinor / 100,
+                  symbol: currencySymbol ?? 'Le',
+                ),
               ),
               trailing: const Icon(Icons.edit_outlined),
               onTap: () => _editMinor(
@@ -235,7 +246,10 @@ class _NotificationsSettingsScreenState
               contentPadding: EdgeInsets.zero,
               title: const Text('Large expense threshold'),
               subtitle: Text(
-                formatCurrency(_draft.largeExpenseThresholdMinor / 100),
+                formatCurrency(
+                  _draft.largeExpenseThresholdMinor / 100,
+                  symbol: currencySymbol ?? 'Le',
+                ),
               ),
               trailing: const Icon(Icons.edit_outlined),
               onTap: () => _editMinor(
@@ -351,6 +365,10 @@ class _NotificationsSettingsScreenState
     required int current,
     required ValueChanged<int> onSave,
   }) async {
+    final activeBusiness = ref.read(activeBusinessProvider).asData?.value;
+    final currencySymbol = activeBusiness is ActiveBusinessData
+        ? activeBusiness.business.currency.symbol
+        : null;
     final controller = TextEditingController(
       text: (current / 100).toStringAsFixed(2),
     );
@@ -361,8 +379,8 @@ class _NotificationsSettingsScreenState
         content: TextField(
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            prefixText: 'Le ',
+          decoration: InputDecoration(
+            prefixText: '${currencySymbol ?? 'Le'} ',
             hintText: '0.00',
           ),
         ),

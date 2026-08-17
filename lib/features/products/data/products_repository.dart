@@ -1,6 +1,11 @@
 import '../domain/inventory_movement.dart';
 import '../domain/product.dart';
 
+String? encodeProductInitialExpiryDate(DateTime? value) {
+  if (value == null) return null;
+  return DateTime.utc(value.year, value.month, value.day, 12).toIso8601String();
+}
+
 class ProductDraft {
   const ProductDraft({
     required this.name,

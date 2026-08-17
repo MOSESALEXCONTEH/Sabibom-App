@@ -22,10 +22,10 @@ enum CashDifferenceKind {
 
   String get storedValue => name;
   String get label => switch (this) {
-        CashDifferenceKind.balanced => 'Balanced',
-        CashDifferenceKind.shortage => 'Shortage',
-        CashDifferenceKind.surplus => 'Surplus',
-      };
+    CashDifferenceKind.balanced => 'Balanced',
+    CashDifferenceKind.shortage => 'Shortage',
+    CashDifferenceKind.surplus => 'Surplus',
+  };
 
   static CashDifferenceKind fromDifference(int differenceMinor) {
     if (differenceMinor == 0) return CashDifferenceKind.balanced;
@@ -116,24 +116,24 @@ class EndOfDaySummary {
   }
 
   Map<String, Object?> toMap() => {
-        'id': id,
-        'businessId': businessId,
-        'dateKey': dateKey,
-        'status': status.storedValue,
-        'openingCashMinor': openingCashMinor,
-        'countedCashMinor': countedCashMinor,
-        'expectedCashMinor': expectedCashMinor,
-        'cashSalesMinor': cashSalesMinor,
-        'cashExpensesMinor': cashExpensesMinor,
-        'cashSupplierPaymentsMinor': cashSupplierPaymentsMinor,
-        'cashCustomerPaymentsMinor': cashCustomerPaymentsMinor,
-        'differenceMinor': differenceMinor,
-        'differenceKind': differenceKind.storedValue,
-        'notes': notes,
-        'finalizedBy': finalizedBy,
-        'calculationVersion': calculationVersion,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+    'id': id,
+    'businessId': businessId,
+    'dateKey': dateKey,
+    'status': status.storedValue,
+    'openingCashMinor': openingCashMinor,
+    'countedCashMinor': countedCashMinor,
+    'expectedCashMinor': expectedCashMinor,
+    'cashSalesMinor': cashSalesMinor,
+    'cashExpensesMinor': cashExpensesMinor,
+    'cashSupplierPaymentsMinor': cashSupplierPaymentsMinor,
+    'cashCustomerPaymentsMinor': cashCustomerPaymentsMinor,
+    'differenceMinor': differenceMinor,
+    'differenceKind': differenceKind.storedValue,
+    'notes': notes,
+    'finalizedBy': finalizedBy,
+    'calculationVersion': calculationVersion,
+    'updatedAt': FieldValue.serverTimestamp(),
+  };
 }
 
 /// Deterministic expected physical cash for a business day.
@@ -155,6 +155,5 @@ class EndOfDayCalculator {
   static int differenceMinor({
     required int countedCashMinor,
     required int expectedCashMinor,
-  }) =>
-      countedCashMinor - expectedCashMinor;
+  }) => countedCashMinor - expectedCashMinor;
 }

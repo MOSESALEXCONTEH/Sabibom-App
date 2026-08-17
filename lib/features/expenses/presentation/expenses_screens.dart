@@ -15,6 +15,7 @@ import '../../../core/services/image_compression_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_network_image.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../../core/widgets/app_tab_page_scaffold.dart';
@@ -696,7 +697,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         title: Text(widget.expenseId == null ? 'Add Expense' : 'Edit Expense'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: appSafeScrollPadding(context),
         children: <Widget>[
           TextField(
             controller: _amount,
@@ -1057,7 +1058,7 @@ class _ExpenseCategoriesScreenState
           }
           final list = snapshot.data!;
           return ListView.builder(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             itemCount: list.length,
             itemBuilder: (context, index) {
               final cat = list[index];

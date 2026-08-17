@@ -3,6 +3,7 @@ import '../../../core/formatting/date_range_utils.dart';
 class DashboardSummary {
   const DashboardSummary({
     required this.totalSales,
+    required this.previousTotalSales,
     required this.totalExpenses,
     required this.orderCount,
     required this.customerCount,
@@ -12,6 +13,9 @@ class DashboardSummary {
     required this.periodEnd,
     required this.currencyCode,
     required this.currencySymbol,
+    this.salesTrend = const <DashboardSalesPoint>[],
+    this.topProducts = const <DashboardTopProduct>[],
+    this.trackedProductCount = 0,
   });
 
   factory DashboardSummary.empty(
@@ -20,6 +24,7 @@ class DashboardSummary {
     String symbol = 'Le',
   }) => DashboardSummary(
     totalSales: 0,
+    previousTotalSales: 0,
     totalExpenses: 0,
     orderCount: 0,
     customerCount: 0,
@@ -32,6 +37,7 @@ class DashboardSummary {
   );
 
   final double totalSales;
+  final double previousTotalSales;
   final double totalExpenses;
   final int orderCount;
   final int customerCount;
@@ -41,6 +47,43 @@ class DashboardSummary {
   final DateTime periodEnd;
   final String currencyCode;
   final String currencySymbol;
+  final List<DashboardSalesPoint> salesTrend;
+  final List<DashboardTopProduct> topProducts;
+  final int trackedProductCount;
+
+  double? get salesChangePercent {
+    if (previousTotalSales == 0) return totalSales == 0 ? 0 : null;
+    return ((totalSales - previousTotalSales) / previousTotalSales) * 100;
+  }
+}
+
+class DashboardSalesPoint {
+  const DashboardSalesPoint({required this.label, required this.total});
+
+  final String label;
+  final double total;
+}
+
+class DashboardTopProduct {
+  const DashboardTopProduct({
+    required this.productId,
+    required this.name,
+    required this.salesTotal,
+    required this.quantity,
+    required this.scorePercent,
+    this.changePercent,
+    this.imageUrl,
+    this.imageCid,
+  });
+
+  final String productId;
+  final String name;
+  final double salesTotal;
+  final double quantity;
+  final double scorePercent;
+  final double? changePercent;
+  final String? imageUrl;
+  final String? imageCid;
 }
 
 enum DashboardActivityType {

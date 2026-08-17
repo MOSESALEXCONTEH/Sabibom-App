@@ -308,7 +308,9 @@ class FirestoreProductsRepository implements ProductsRepository {
       'status': draft.status.name,
       'tracksExpiry': draft.tracksExpiry,
       'defaultExpiryReminderDays': draft.defaultExpiryReminderDays,
-      'initialStockExpiryDate': draft.initialStockExpiryDate?.toIso8601String(),
+      'initialStockExpiryDate': encodeProductInitialExpiryDate(
+        draft.initialStockExpiryDate,
+      ),
       'initialStockExpiryDateKnown':
           draft.initialStockExpiryDateKnown &&
           draft.initialStockExpiryDate != null,

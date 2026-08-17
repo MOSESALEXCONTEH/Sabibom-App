@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/app_scroll_padding.dart';
+
 import '../../branches/application/current_branch_providers.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../inventory/domain/stock_quantity_rules.dart';
@@ -77,7 +79,12 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
             child: Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                padding: appSafeScrollPadding(
+                  context,
+                  left: 20,
+                  top: 12,
+                  right: 20,
+                ),
                 children: <Widget>[
                   Text(
                     product.name,
@@ -137,8 +144,9 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _unitCost,
-                      decoration: const InputDecoration(
-                        labelText: 'Cost price per unit (Le) *',
+                      decoration: InputDecoration(
+                        labelText:
+                            'Cost price per unit (${active.business.currency.symbol}) *',
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,

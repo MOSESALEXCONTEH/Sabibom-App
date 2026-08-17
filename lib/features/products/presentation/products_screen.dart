@@ -79,11 +79,11 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
             )
           : null,
       floatingActionButton: hasBusiness && !_selectionMode
-          ? FloatingActionButton.extended(
+          ? FloatingActionButton(
               heroTag: 'fab-new-product',
+              tooltip: 'Add ${terminology.product}',
               onPressed: () => context.pushNamed(AppRouteNames.newProduct),
-              icon: const Icon(Icons.add),
-              label: Text('Add ${terminology.product}'),
+              child: const Icon(Icons.add),
             )
           : null,
       body: active.when(
@@ -313,12 +313,39 @@ class _ProductsBody extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              TextField(
-                onChanged: onQueryChanged,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search name, SKU or barcode',
-                ),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      onChanged: onQueryChanged,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Search products, SKU or barcode',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  IconButton.filledTonal(
+                    tooltip: 'Filters and sorting',
+                    onPressed: () => _showFilters(
+                      context,
+                      categories: categories,
+                      inventoryEnabled: capabilities.managesInventory,
+                    ),
+                    icon: Badge(
+                      isLabelVisible:
+                          sort != ProductSort.name ||
+                          category != null ||
+                          !const <ProductStockFilter>{
+                            ProductStockFilter.all,
+                            ProductStockFilter.inStock,
+                            ProductStockFilter.lowStock,
+                            ProductStockFilter.expiringSoon,
+                          }.contains(filter),
+                      child: const Icon(Icons.tune),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.sm + 4),
               SingleChildScrollView(
@@ -326,7 +353,12 @@ class _ProductsBody extends ConsumerWidget {
                 child: Row(
                   children:
                       (capabilities.managesInventory
-                              ? ProductStockFilter.values
+                              ? const <ProductStockFilter>[
+                                  ProductStockFilter.all,
+                                  ProductStockFilter.inStock,
+                                  ProductStockFilter.lowStock,
+                                  ProductStockFilter.expiringSoon,
+                                ]
                               : const <ProductStockFilter>[
                                   ProductStockFilter.all,
                                   ProductStockFilter.archived,
@@ -338,7 +370,14 @@ class _ProductsBody extends ConsumerWidget {
                                 right: AppSpacing.sm,
                               ),
                               child: ChoiceChip(
-                                label: Text(_filterLabel(value)),
+                                avatar: selected
+                                    ? const Icon(Icons.check, size: 16)
+                                    : null,
+                                label: Text(
+                                  value == ProductStockFilter.expiringSoon
+                                      ? 'Expiry'
+                                      : _filterLabel(value),
+                                ),
                                 selected: selected,
                                 onSelected: (_) => onFilterChanged(value),
                               ),
@@ -347,43 +386,27 @@ class _ProductsBody extends ConsumerWidget {
                           .toList(),
                 ),
               ),
-              const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<ProductSort>(
-                initialValue: sort,
-                decoration: const InputDecoration(labelText: 'Sort by'),
-                items: ProductSort.values
-                    .map(
-                      (value) => DropdownMenuItem<ProductSort>(
-                        value: value,
-                        child: Text(_sortLabel(value)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) onSortChanged(value);
-                },
-              ),
-              if (categories.isNotEmpty) ...<Widget>[
-                const SizedBox(height: AppSpacing.sm),
-                DropdownButtonFormField<String?>(
-                  initialValue: category,
-                  decoration: const InputDecoration(labelText: 'Category'),
-                  items: <DropdownMenuItem<String?>>[
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('All categories'),
-                    ),
-                    ...categories.map(
-                      (name) => DropdownMenuItem<String?>(
-                        value: name,
-                        child: Text(name),
-                      ),
-                    ),
-                  ],
-                  onChanged: onCategoryChanged,
-                ),
-              ],
               const SizedBox(height: AppSpacing.sm + 4),
+              Row(
+                children: <Widget>[
+                  Text(
+                    capabilities.managesInventory
+                        ? 'Inventory'
+                        : terminology.products,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${filtered.length} ${filtered.length == 1 ? 'item' : 'items'}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
               Expanded(
                 child: filtered.isEmpty
                     ? const AppEmptyState(
@@ -459,6 +482,135 @@ class _ProductsBody extends ConsumerWidget {
         );
       },
     );
+  }
+
+  Future<void> _showFilters(
+    BuildContext context, {
+    required List<String> categories,
+    required bool inventoryEnabled,
+  }) async {
+    var draftFilter = filter;
+    var draftSort = sort;
+    var draftCategory = category;
+    final apply = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Filters and sorting',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  'Stock status',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children:
+                      (inventoryEnabled
+                              ? ProductStockFilter.values
+                              : const <ProductStockFilter>[
+                                  ProductStockFilter.all,
+                                  ProductStockFilter.archived,
+                                ])
+                          .map(
+                            (value) => ChoiceChip(
+                              label: Text(_filterLabel(value)),
+                              selected: draftFilter == value,
+                              onSelected: (_) =>
+                                  setSheetState(() => draftFilter = value),
+                            ),
+                          )
+                          .toList(growable: false),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                DropdownButtonFormField<ProductSort>(
+                  initialValue: draftSort,
+                  decoration: const InputDecoration(labelText: 'Sort by'),
+                  items: ProductSort.values
+                      .map(
+                        (value) => DropdownMenuItem<ProductSort>(
+                          value: value,
+                          child: Text(_sortLabel(value)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setSheetState(() => draftSort = value);
+                    }
+                  },
+                ),
+                if (categories.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: AppSpacing.md),
+                  DropdownButtonFormField<String?>(
+                    initialValue: draftCategory,
+                    decoration: const InputDecoration(labelText: 'Category'),
+                    items: <DropdownMenuItem<String?>>[
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('All categories'),
+                      ),
+                      ...categories.map(
+                        (name) => DropdownMenuItem<String?>(
+                          value: name,
+                          child: Text(name),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setSheetState(() => draftCategory = value),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => setSheetState(() {
+                          draftFilter = ProductStockFilter.all;
+                          draftSort = ProductSort.name;
+                          draftCategory = null;
+                        }),
+                        child: const Text('Reset'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(sheetContext, true),
+                        child: const Text('Apply'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (apply != true) return;
+    onFilterChanged(draftFilter);
+    onSortChanged(draftSort);
+    onCategoryChanged(draftCategory);
   }
 
   static String _filterLabel(ProductStockFilter filter) => switch (filter) {

@@ -1,4 +1,5 @@
 import type {VercelRequest, VercelResponse} from "@vercel/node";
+import {adminFirestore} from "../../config/firebase-admin";
 import {authenticateRequest} from "../../middleware/authenticate-request";
 import {enforceRateLimit} from "../../middleware/rate-limit";
 import {
@@ -7,6 +8,7 @@ import {
 } from "../../prompts/compose-message-prompt";
 import {composeMessageRequestSchema} from "../../schemas/compose-message-schema";
 import {requireBusinessAccess} from "../../services/business-access-service";
+import {consumeSabiRequest} from "../../services/billing/entitlements";
 import {groqChatJson} from "../../services/groq-service";
 import {errors} from "../../utils/api-errors";
 import {sendSuccess} from "../../utils/api-response";
@@ -29,6 +31,11 @@ export default createHandler(["POST"], async (req: VercelRequest, res: VercelRes
     businessId,
     requiredPermission: "use_sabi",
   });
+  await consumeSabiRequest({
+    db: adminFirestore(),
+    businessId,
+    uid: identity.uid,
+  });
 
   await enforceRateLimit({
     uid: identity.uid,
@@ -47,7 +54,7 @@ export default createHandler(["POST"], async (req: VercelRequest, res: VercelRes
       notes: notes?.trim() || null,
       customerName: customerName?.trim() || null,
       businessName: businessName?.trim() || null,
-      localeHint: "Sierra Leone merchant messaging customers",
+      localeHint: "global merchant messaging customers",
     }),
     temperature: 0.5,
   });

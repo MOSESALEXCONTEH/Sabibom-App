@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 
 /// Password and sign-in security for the account.
 class SecuritySettingsScreen extends StatefulWidget {
@@ -38,7 +39,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Security')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: appSafeScrollPadding(context),
         children: <Widget>[
           Text(
             'Keep your SabiBom account safe. Use a strong password and only share '

@@ -13,6 +13,7 @@ import '../../../core/services/image_compression_service.dart';
 import '../../../core/sync/offline_mutation_queue.dart';
 import '../../../core/sync/pending_media_store.dart';
 import '../../../core/widgets/app_network_image.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../../core/widgets/barcode_scanner_screen.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../business_profile/services/pinata_upload_service.dart';
@@ -168,15 +169,23 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
             );
           }
           _hydrate(product);
-          return _buildForm(context, businessId);
+          return _buildForm(
+            context,
+            businessId,
+            active.business.currency.symbol,
+          );
         },
       );
     }
 
-    return _buildForm(context, businessId);
+    return _buildForm(context, businessId, active.business.currency.symbol);
   }
 
-  Widget _buildForm(BuildContext context, String businessId) {
+  Widget _buildForm(
+    BuildContext context,
+    String businessId,
+    String currencySymbol,
+  ) {
     final isEdit = widget.mode == _ProductFormMode.edit;
     final terminology = ref.watch(currentBusinessTerminologyProvider);
     final capabilities = ref.watch(currentBusinessCapabilitiesProvider);
@@ -188,7 +197,12 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            padding: appSafeScrollPadding(
+              context,
+              left: 20,
+              top: 12,
+              right: 20,
+            ),
             children: <Widget>[
               Center(
                 child: Stack(
@@ -257,8 +271,8 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _sellingPrice,
-                decoration: const InputDecoration(
-                  labelText: 'Selling price (Le) *',
+                decoration: InputDecoration(
+                  labelText: 'Selling price ($currencySymbol) *',
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -274,7 +288,9 @@ class _ProductFormScaffoldState extends ConsumerState<_ProductFormScaffold> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _costPrice,
-                decoration: const InputDecoration(labelText: 'Cost price (Le)'),
+                decoration: InputDecoration(
+                  labelText: 'Cost price ($currencySymbol)',
+                ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),

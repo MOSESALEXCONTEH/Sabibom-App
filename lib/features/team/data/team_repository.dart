@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/network/api_exception.dart';
+import '../../../core/network/authenticated_api_client.dart';
 import '../../branches/domain/business_branch.dart';
 import '../domain/app_permission.dart';
 import '../domain/approval_models.dart';
@@ -55,10 +57,15 @@ Stream<List<QuerySnapshot<Map<String, dynamic>>>> _combineActivitySnapshots(
 }
 
 class TeamRepository {
-  TeamRepository({FirebaseFirestore? firestore})
-    : _db = firestore ?? FirebaseFirestore.instance;
+  TeamRepository({
+    FirebaseFirestore? firestore,
+    AuthenticatedApiClient? apiClient,
+  }) : _db = firestore ?? FirebaseFirestore.instance,
+       _apiClient =
+           apiClient ?? (firestore == null ? AuthenticatedApiClient() : null);
 
   final FirebaseFirestore _db;
+  final AuthenticatedApiClient? _apiClient;
 
   CollectionReference<Map<String, dynamic>> _members(String businessId) =>
       _db.collection('businesses').doc(businessId).collection('members');
@@ -356,6 +363,49 @@ class TeamRepository {
       }
     }
 
+    final apiClient = _apiClient;
+    if (apiClient != null) {
+      try {
+        final response = await apiClient.postJson(
+          '/api/team/invite',
+          body: {
+            'businessId': businessId,
+            'email': ?normalizedEmail,
+            'phone': ?normalizedPhone,
+            if (displayName?.trim().isNotEmpty == true)
+              'displayName': displayName!.trim(),
+            'roleId': roleId,
+            'roleName': roleName,
+            'permissions': permissions.map((item) => item.code).toList(),
+            if (message?.trim().isNotEmpty == true) 'message': message!.trim(),
+            'expiresInDays': expiresIn.inDays.clamp(1, 30),
+          },
+        );
+        return StaffInvitation(
+          id: response['invitationId'] as String,
+          businessId: businessId,
+          businessName: businessName,
+          email: email?.trim(),
+          normalizedEmail: normalizedEmail,
+          phone: phone?.trim(),
+          normalizedPhone: normalizedPhone,
+          displayName: displayName?.trim(),
+          roleId: roleId,
+          roleName: roleName,
+          permissionsSnapshot: permissions,
+          status: InvitationStatus.pending,
+          invitedBy: invitedBy,
+          invitedByName: invitedByName,
+          inviteCode: response['inviteCode'] as String,
+          expiresAt: DateTime.parse(response['expiresAt'] as String),
+          message: message?.trim(),
+        );
+      } on ApiException catch (error) {
+        throw TeamException(error.message, code: error.code);
+      }
+    }
+
+    // Explicit Firestore injection is retained for repository unit tests only.
     final ref = _invitations(businessId).doc();
     final invitation = StaffInvitation(
       id: ref.id,

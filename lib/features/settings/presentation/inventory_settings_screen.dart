@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../auth/application/user_profile_provider.dart';
 import '../../inventory/application/inventory_providers.dart';
 import '../../inventory/domain/inventory_expiry_settings.dart';
@@ -45,17 +46,19 @@ class _InventorySettingsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final businessId =
-        ref.watch(currentUserProfileProvider).asData?.value?.activeBusinessId;
+    final businessId = ref
+        .watch(currentUserProfileProvider)
+        .asData
+        ?.value
+        ?.activeBusinessId;
     if (businessId == null || businessId.isEmpty) {
       return const Scaffold(
         body: Center(child: Text('No business has been set up yet.')),
       );
     }
 
-    final canManageExpiry = ref.watch(
-          hasPermissionProvider(AppPermission.manageProductExpiry),
-        ) ||
+    final canManageExpiry =
+        ref.watch(hasPermissionProvider(AppPermission.manageProductExpiry)) ||
         ref.watch(hasPermissionProvider(AppPermission.editBusinessSettings));
     final expiryAsync = ref.watch(inventoryExpirySettingsProvider(businessId));
 
@@ -99,7 +102,7 @@ class _InventorySettingsScreenState
         return Scaffold(
           appBar: AppBar(title: const Text('Inventory Settings')),
           body: ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: appSafeScrollPadding(context),
             children: <Widget>[
               Text(
                 'These defaults apply when you add new products. You can still '
@@ -166,9 +169,9 @@ class _InventorySettingsScreenState
               const SizedBox(height: AppSpacing.xl),
               Text(
                 'Expiry alerts',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
@@ -188,7 +191,8 @@ class _InventorySettingsScreenState
                 enabled: canManageExpiry,
                 decoration: const InputDecoration(
                   labelText: 'Reminder days',
-                  helperText: 'Comma-separated days before expiry (e.g. 30,14,7,3,1,0).',
+                  helperText:
+                      'Comma-separated days before expiry (e.g. 30,14,7,3,1,0).',
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -277,10 +281,7 @@ class _InventorySettingsScreenState
     );
   }
 
-  Future<void> _save(
-    String businessId, {
-    required bool canManageExpiry,
-  }) async {
+  Future<void> _save(String businessId, {required bool canManageExpiry}) async {
     final threshold = double.tryParse(_threshold.text.trim()) ?? 5;
     if (threshold < 0 || !threshold.isFinite) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -290,16 +291,16 @@ class _InventorySettingsScreenState
     }
     setState(() => _saving = true);
     try {
-      await FirebaseFirestore.instance.collection('businesses').doc(businessId).set(
-        <String, Object?>{
-          'trackStockByDefault': _trackByDefault,
-          'allowNegativeStock': _allowNegative,
-          'defaultLowStockThreshold': threshold,
-          'costPriceStrategy': _costStrategy,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .set(<String, Object?>{
+            'trackStockByDefault': _trackByDefault,
+            'allowNegativeStock': _allowNegative,
+            'defaultLowStockThreshold': threshold,
+            'costPriceStrategy': _costStrategy,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       if (canManageExpiry) {
         final days = _reminderDays.text
@@ -311,8 +312,9 @@ class _InventorySettingsScreenState
           businessId: businessId,
           settings: InventoryExpirySettings(
             enabled: _expiryEnabled,
-            defaultReminderDays:
-                InventoryExpirySettings.normalizeReminderDays(days),
+            defaultReminderDays: InventoryExpirySettings.normalizeReminderDays(
+              days,
+            ),
             notifyOwners: _notifyOwners,
             notifyManagers: _notifyManagers,
             notifyStockKeepers: _notifyStockKeepers,

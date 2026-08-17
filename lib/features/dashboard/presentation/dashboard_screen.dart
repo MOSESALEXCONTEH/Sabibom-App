@@ -30,6 +30,7 @@ import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
 import '../application/dashboard_providers.dart';
 import '../domain/dashboard_models.dart';
+import 'widgets/dashboard_analytics_panel.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -93,17 +94,6 @@ class _NoBusinessDashboard extends StatelessWidget {
           actionLabel: 'Set Up Business',
           onAction: () => context.push(AppRoutes.businessSetup),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Text('Quick actions', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          'Set up a business to use these actions.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: context.mutedTextColor),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        const _QuickActionGrid(enabled: false),
       ],
     );
   }
@@ -163,17 +153,7 @@ class _BusinessDashboard extends ConsumerWidget {
               label: 'sales summary',
               onRetry: () => ref.invalidate(dashboardSummaryProvider(request)),
             ),
-            data: (data) => _SalesSummaryCard(
-              summary: data,
-              period: period,
-              terminology: terminology,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          summary.when(
-            loading: () => const AppCardSkeleton(height: 190),
-            error: (_, _) => const SizedBox.shrink(),
-            data: (data) => _BusinessAnalyticsPanel(
+            data: (data) => DashboardSalesAnalytics(
               summary: data,
               period: period,
               terminology: terminology,
@@ -181,14 +161,6 @@ class _BusinessDashboard extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           NeedsAttentionSection(businessId: business.businessId),
-          const SizedBox(height: AppSpacing.lg),
-          const _SectionHeader(title: 'Quick actions'),
-          const SizedBox(height: AppSpacing.md),
-          _QuickActionGrid(
-            enabled: true,
-            terminology: terminology,
-            capabilities: capabilities,
-          ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionHeader(title: 'Business overview'),
           const SizedBox(height: AppSpacing.md),
@@ -431,6 +403,7 @@ class _PeriodSelector extends ConsumerWidget {
   );
 }
 
+// ignore: unused_element
 class _SalesSummaryCard extends StatelessWidget {
   const _SalesSummaryCard({
     required this.summary,
@@ -577,6 +550,7 @@ class _SalesChartDecoration extends StatelessWidget {
   );
 }
 
+// ignore: unused_element
 class _BusinessAnalyticsPanel extends StatelessWidget {
   const _BusinessAnalyticsPanel({
     required this.summary,
@@ -1131,10 +1105,13 @@ class _FinanceShortcuts extends ConsumerWidget {
       ref.watch(hasPermissionProvider(AppPermission.viewLowStockAlerts));
 }
 
+// ignore: unused_element
 class _QuickActionGrid extends StatelessWidget {
   const _QuickActionGrid({
     required this.enabled,
+    // ignore: unused_element_parameter
     this.terminology = const BusinessTerminology.product(),
+    // ignore: unused_element_parameter
     this.capabilities = const BusinessCapabilities(
       BusinessOperatingModel.product,
     ),

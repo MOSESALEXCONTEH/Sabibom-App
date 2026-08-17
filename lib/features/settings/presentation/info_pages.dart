@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
@@ -10,7 +11,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Privacy Policy')),
     body: ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: appSafeScrollPadding(context),
       children: const <Widget>[
         _Section(
           title: 'What we collect',
@@ -69,7 +70,7 @@ class TermsScreen extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Terms')),
     body: ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: appSafeScrollPadding(context),
       children: const <Widget>[
         _Section(
           title: 'Using SabiBom',
@@ -129,7 +130,7 @@ class HelpSupportScreen extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Help and Support')),
     body: ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: appSafeScrollPadding(context),
       children: <Widget>[
         Text(
           'Quick answers for running ${AppStrings.appName} day to day.',
@@ -201,7 +202,7 @@ class AboutScreen extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text('About ${AppStrings.appName}')),
     body: ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: appSafeScrollPadding(context),
       children: <Widget>[
         Text(
           AppStrings.appName,

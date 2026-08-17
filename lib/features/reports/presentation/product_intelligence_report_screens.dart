@@ -14,6 +14,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/app_status_views.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../business_setup/domain/business.dart';
 import '../../dashboard/application/dashboard_providers.dart';
@@ -118,7 +119,7 @@ class _ProductProfitReportScreenState
           onRetry: () => ref.invalidate(productProfitReportProvider(request)),
         ),
         data: (data) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: appSafeScrollPadding(context),
           children: [
             Wrap(
               spacing: AppSpacing.sm,
@@ -378,7 +379,7 @@ class _ProductExpiryReportScreenState
           onRetry: () => ref.invalidate(productExpiryReportProvider(request)),
         ),
         data: (data) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: appSafeScrollPadding(context),
           children: [
             Wrap(
               spacing: AppSpacing.sm,

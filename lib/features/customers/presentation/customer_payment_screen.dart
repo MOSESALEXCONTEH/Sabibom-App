@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/formatting/currency_formatter.dart';
+import '../../../core/widgets/app_scroll_padding.dart';
 import '../../branches/application/current_branch_providers.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../sales/domain/sale_models.dart';
@@ -69,7 +70,12 @@ class _CustomerPaymentScreenState extends ConsumerState<CustomerPaymentScreen> {
             child: Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                padding: appSafeScrollPadding(
+                  context,
+                  left: 20,
+                  top: 12,
+                  right: 20,
+                ),
                 children: <Widget>[
                   Text(
                     customer.name,
@@ -84,8 +90,9 @@ class _CustomerPaymentScreenState extends ConsumerState<CustomerPaymentScreen> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _amount,
-                    decoration: const InputDecoration(
-                      labelText: 'Amount (Le) *',
+                    decoration: InputDecoration(
+                      labelText:
+                          'Amount (${active.business.currency.symbol}) *',
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
@@ -153,9 +160,9 @@ class _CustomerPaymentScreenState extends ConsumerState<CustomerPaymentScreen> {
     final branchId = ref.read(currentWritableBranchIdProvider);
     if (branchId == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(branchWriteBlockedMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(branchWriteBlockedMessage)));
       return;
     }
     setState(() => _submitting = true);
