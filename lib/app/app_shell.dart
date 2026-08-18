@@ -12,23 +12,50 @@ import '../core/widgets/app_status_views.dart';
 import '../features/business_setup/application/business_experience_providers.dart';
 import 'widgets/modern_bottom_navigation.dart';
 
-class AuthenticatedAppShell extends ConsumerWidget {
+class AuthenticatedAppShell extends ConsumerStatefulWidget {
   const AuthenticatedAppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AuthenticatedAppShell> createState() =>
+      _AuthenticatedAppShellState();
+}
+
+class _AuthenticatedAppShellState extends ConsumerState<AuthenticatedAppShell>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _replayPending());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _replayPending();
+  }
+
+  void _replayPending() {
+    if (!mounted) return;
+    unawaited(ref.read(offlineMutationQueueProvider).syncPending());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isOnline = ref.watch(isOnlineProvider).asData?.value ?? true;
-    ref.listen(isOnlineProvider, (_, next) {
-      if (next.asData?.value == true) {
-        unawaited(ref.read(offlineMutationQueueProvider).syncPending());
+    ref.listen(isOnlineProvider, (previous, next) {
+      if (previous?.asData?.value == false && next.asData?.value == true) {
+        _replayPending();
       }
     });
-    if (isOnline) {
-      unawaited(ref.read(offlineMutationQueueProvider).syncPending());
-    }
     final terminology = ref.watch(currentBusinessTerminologyProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
@@ -54,15 +81,15 @@ class AuthenticatedAppShell extends ConsumerWidget {
                 message:
                     'Offline: showing saved data. New changes may wait to sync.',
               ),
-            Expanded(child: navigationShell),
+            Expanded(child: widget.navigationShell),
           ],
         ),
         bottomNavigationBar: ModernBottomNavigation(
           terminology: terminology,
-          selectedIndex: navigationShell.currentIndex,
-          onDestinationSelected: (index) => navigationShell.goBranch(
+          selectedIndex: widget.navigationShell.currentIndex,
+          onDestinationSelected: (index) => widget.navigationShell.goBranch(
             index,
-            initialLocation: index == navigationShell.currentIndex,
+            initialLocation: index == widget.navigationShell.currentIndex,
           ),
         ),
       ),

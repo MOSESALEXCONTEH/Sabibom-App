@@ -238,7 +238,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   ),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
-                      return Center(child: Text('${snapshot.error}'));
+                      return AppErrorState(
+                        message:
+                            'Could not load expenses. Check your connection and try again.',
+                        onRetry: () => setState(() {}),
+                      );
                     }
                     if (!snapshot.hasData) {
                       return const AppListSkeleton(
@@ -431,10 +435,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       },
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => const Scaffold(
+      error: (e, _) => Scaffold(
         body: AppErrorState(
           message:
               'Could not load expenses. Check your connection and try again.',
+          onRetry: () => ref.invalidate(activeBusinessProvider),
         ),
       ),
     );
@@ -1051,12 +1056,29 @@ class _ExpenseCategoriesScreenState
             .watchCategories(businessId, includeInactive: true),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text('${snapshot.error}'));
+            return AppErrorState(
+              message:
+                  'Could not load expense categories. Check your connection and try again.',
+              onRetry: () => setState(() {}),
+            );
           }
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const AppListSkeleton(
+              padding: EdgeInsets.all(AppSpacing.md),
+            );
           }
           final list = snapshot.data!;
+          if (list.isEmpty) {
+            return AppEmptyState(
+              title: 'No expense categories',
+              description:
+                  'Add a category to keep expense reports organized.',
+              icon: Icons.category_outlined,
+              actionLabel: 'Add Category',
+              actionIcon: Icons.add,
+              onAction: () => _editCategory(context, businessId),
+            );
+          }
           return ListView.builder(
             padding: appSafeScrollPadding(context),
             itemCount: list.length,

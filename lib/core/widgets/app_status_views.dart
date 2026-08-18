@@ -28,7 +28,7 @@ class AppEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Semantics(
+    final content = Semantics(
       liveRegion: true,
       label: '$title. $description',
       child: Center(
@@ -78,7 +78,9 @@ class AppEmptyState extends StatelessWidget {
           ),
         ),
       ),
-    )
+    );
+    if (MediaQuery.disableAnimationsOf(context)) return content;
+    return content
         .animate()
         .fadeIn(duration: AppMotion.standard, curve: AppMotion.entranceCurve)
         .slideY(

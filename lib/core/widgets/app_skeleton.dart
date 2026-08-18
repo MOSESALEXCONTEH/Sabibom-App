@@ -9,22 +9,32 @@ import '../theme/app_spacing.dart';
 /// [CircularProgressIndicator] for list/section loading states - skeletons
 /// communicate expected layout and feel faster than a spinner.
 class AppShimmer extends StatelessWidget {
-  const AppShimmer({required this.child, super.key});
+  const AppShimmer({required this.child, this.semanticLabel, super.key});
 
   final Widget child;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) return child;
-    return RepaintBoundary(
-      child: Shimmer.fromColors(
-        baseColor: context.borderColor,
-        highlightColor: context.isDarkTheme
-            ? const Color(0xFF3A4356)
-            : const Color(0xFFF3F4F6),
-        period: const Duration(milliseconds: 1300),
-        child: child,
-      ),
+    final placeholder = MediaQuery.disableAnimationsOf(context)
+        ? child
+        : RepaintBoundary(
+            child: Shimmer.fromColors(
+              baseColor: context.borderColor,
+              highlightColor: context.isDarkTheme
+                  ? const Color(0xFF3A4356)
+                  : const Color(0xFFF3F4F6),
+              period: const Duration(milliseconds: 1300),
+              child: child,
+            ),
+          );
+    final label = semanticLabel;
+    if (label == null) return placeholder;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: label,
+      child: ExcludeSemantics(child: placeholder),
     );
   }
 }
@@ -74,6 +84,7 @@ class AppListSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppShimmer(
+      semanticLabel: 'Loading list',
       child: ListView.separated(
         padding: padding,
         physics: const NeverScrollableScrollPhysics(),
@@ -124,6 +135,7 @@ class AppCardSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppShimmer(
+      semanticLabel: 'Loading content',
       child: AppSkeletonBlock(
         width: double.infinity,
         height: height,
