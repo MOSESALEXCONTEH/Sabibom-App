@@ -1,9 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import '../application/ad_consent_controller.dart';
 import '../application/ads_providers.dart';
 
 class FreePlanBannerAd extends ConsumerStatefulWidget {
@@ -53,24 +52,13 @@ class _FreePlanBannerAdState extends ConsumerState<FreePlanBannerAd> {
 
   Future<void> _load(String unitId) async {
     _loading = true;
-    final consent = ConsentInformation.instance;
-    final consentReady = Completer<void>();
-    consent.requestConsentInfoUpdate(
-      ConsentRequestParameters(),
-      () async {
-        await ConsentForm.loadAndShowConsentFormIfRequired((_) {});
-        if (!consentReady.isCompleted) consentReady.complete();
-      },
-      (_) {
-        if (!consentReady.isCompleted) consentReady.complete();
-      },
-    );
-    await consentReady.future;
-    if (!await consent.canRequestAds()) {
+    final canRequestAds = await ref
+        .read(adConsentControllerProvider)
+        .initialize();
+    if (!canRequestAds) {
       if (mounted) setState(() => _loading = false);
       return;
     }
-    await MobileAds.instance.initialize();
     final banner = BannerAd(
       adUnitId: unitId,
       size: AdSize.banner,

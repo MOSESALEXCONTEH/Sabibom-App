@@ -37,26 +37,105 @@ class RuntimeMaintenanceConfiguration {
   }
 }
 
+class RuntimeAndroidUpdatePolicy {
+  const RuntimeAndroidUpdatePolicy({
+    this.schemaVersion,
+    this.enabled = false,
+    this.effectiveEnabled = false,
+    this.environment,
+    this.packageId,
+    this.latestBuildNumber,
+    this.minimumBuildNumber,
+    this.displayVersion,
+    this.storeUrl,
+    this.title = 'Update SabiBom',
+    this.message = 'A newer version of SabiBom is required to continue.',
+    this.effectiveAt,
+    this.expiresAt,
+    this.updatedAt,
+    this.revision = 0,
+  });
+
+  static const expectedPackageId = 'com.sabibom.app';
+  static const canonicalPlayUrl =
+      'https://play.google.com/store/apps/details?id=com.sabibom.app';
+
+  final int? schemaVersion;
+  final bool enabled;
+  final bool effectiveEnabled;
+  final String? environment;
+  final String? packageId;
+  final String? latestBuildNumber;
+  final String? minimumBuildNumber;
+  final String? displayVersion;
+  final String? storeUrl;
+  final String title;
+  final String message;
+  final DateTime? effectiveAt;
+  final DateTime? expiresAt;
+  final DateTime? updatedAt;
+  final int revision;
+
+  static DateTime? _parseDate(Object? value) {
+    if (value is! String || value.trim().isEmpty) return null;
+    return DateTime.tryParse(value)?.toUtc();
+  }
+
+  factory RuntimeAndroidUpdatePolicy.fromMap(Map<String, dynamic> data) {
+    String? stringValue(String key) {
+      final value = data[key];
+      return value is String && value.trim().isNotEmpty ? value.trim() : null;
+    }
+
+    return RuntimeAndroidUpdatePolicy(
+      schemaVersion: (data['schemaVersion'] as num?)?.toInt(),
+      enabled: data['enabled'] == true,
+      effectiveEnabled: data['effectiveEnabled'] == true,
+      environment: stringValue('environment'),
+      packageId: stringValue('packageId'),
+      latestBuildNumber: stringValue('latestBuildNumber'),
+      minimumBuildNumber: stringValue('minimumBuildNumber'),
+      displayVersion: stringValue('displayVersion'),
+      storeUrl: stringValue('storeUrl'),
+      title: stringValue('title') ?? 'Update SabiBom',
+      message:
+          stringValue('message') ??
+          'A newer version of SabiBom is required to continue.',
+      effectiveAt: _parseDate(data['effectiveAt']),
+      expiresAt: _parseDate(data['expiresAt']),
+      updatedAt: _parseDate(data['updatedAt']),
+      revision: (data['revision'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class RuntimeAndroidRelease {
   const RuntimeAndroidRelease({
     this.latestVersion,
     this.minimumSupportedVersion,
     this.storeUrl,
     this.releaseNotes,
+    this.updatePolicy = const RuntimeAndroidUpdatePolicy(),
   });
 
   final String? latestVersion;
   final String? minimumSupportedVersion;
   final String? storeUrl;
   final String? releaseNotes;
+  final RuntimeAndroidUpdatePolicy updatePolicy;
 
-  factory RuntimeAndroidRelease.fromMap(Map<String, dynamic> data) =>
-      RuntimeAndroidRelease(
-        latestVersion: data['latestVersion'] as String?,
-        minimumSupportedVersion: data['minimumSupportedVersion'] as String?,
-        storeUrl: data['storeUrl'] as String?,
-        releaseNotes: data['releaseNotes'] as String?,
-      );
+  factory RuntimeAndroidRelease.fromMap(Map<String, dynamic> data) {
+    final policy = data['updatePolicy'];
+    return RuntimeAndroidRelease(
+      latestVersion: data['latestVersion'] as String?,
+      minimumSupportedVersion: data['minimumSupportedVersion'] as String?,
+      storeUrl: data['storeUrl'] as String?,
+      releaseNotes: data['releaseNotes'] as String?,
+      updatePolicy: RuntimeAndroidUpdatePolicy.fromMap(
+        policy is Map ? Map<String, dynamic>.from(policy) : const {},
+      ),
+    );
+  }
 }
 
 class RuntimeConfiguration {

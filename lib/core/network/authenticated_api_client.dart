@@ -6,17 +6,38 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'api_config.dart';
 import 'api_exception.dart';
 
 class AuthenticatedApiClient {
-  AuthenticatedApiClient({FirebaseAuth? auth, http.Client? httpClient})
+  AuthenticatedApiClient({
+    FirebaseAuth? auth,
+    http.Client? httpClient,
+    Future<PackageInfo> Function()? packageInfoLoader,
+  })
     : _auth = auth ?? FirebaseAuth.instance,
-      _http = httpClient ?? http.Client();
+      _http = httpClient ?? http.Client(),
+      _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform;
 
   final FirebaseAuth _auth;
   final http.Client _http;
+  final Future<PackageInfo> Function() _packageInfoLoader;
+  Future<PackageInfo>? _packageInfo;
+
+  Future<Map<String, String>> _appMetadataHeaders() async {
+    try {
+      final package = await (_packageInfo ??= _packageInfoLoader());
+      return <String, String>{
+        'X-SabiBom-Platform': defaultTargetPlatform.name,
+        'X-SabiBom-App-Version': package.version,
+        'X-SabiBom-App-Build': package.buildNumber,
+      };
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
 
   Future<Map<String, dynamic>> postJson(
     String path, {
@@ -68,6 +89,7 @@ class AuthenticatedApiClient {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       };
+      headers.addAll(await _appMetadataHeaders());
       try {
         final appCheckToken = await FirebaseAppCheck.instance.getToken();
         if (appCheckToken != null && appCheckToken.isNotEmpty) {

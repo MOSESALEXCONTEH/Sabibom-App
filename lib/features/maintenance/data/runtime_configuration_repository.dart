@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -43,12 +44,13 @@ final runtimeConfigurationProvider = StreamProvider<RuntimeConfiguration>((
   ref,
 ) async* {
   final repository = ref.watch(runtimeConfigurationRepositoryProvider);
+  final random = Random();
   while (true) {
     try {
       yield await repository.fetch();
     } catch (_) {
       // API middleware still enforces API-wide maintenance if this check fails.
     }
-    await Future<void>.delayed(const Duration(seconds: 45));
+    await Future<void>.delayed(Duration(seconds: 45 + random.nextInt(16)));
   }
 });

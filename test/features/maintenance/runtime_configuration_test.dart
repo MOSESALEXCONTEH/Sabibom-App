@@ -17,6 +17,22 @@ void main() {
           'storeUrl':
               'https://play.google.com/store/apps/details?id=com.sabibom.app',
           'releaseNotes': 'Branch reporting improvements',
+          'updatePolicy': {
+            'schemaVersion': 2,
+            'enabled': true,
+            'effectiveEnabled': true,
+            'environment': 'production',
+            'packageId': 'com.sabibom.app',
+            'latestBuildNumber': '24',
+            'minimumBuildNumber': '21',
+            'displayVersion': '2.4.0',
+            'storeUrl':
+                'https://play.google.com/store/apps/details?id=com.sabibom.app',
+            'title': 'Update SabiBom',
+            'message': 'Install the latest version.',
+            'expiresAt': '2026-08-20T00:00:00.000Z',
+            'revision': 3,
+          },
         },
       },
     });
@@ -28,6 +44,9 @@ void main() {
       configuration.androidRelease.releaseNotes,
       'Branch reporting improvements',
     );
+    expect(configuration.androidRelease.updatePolicy.schemaVersion, 2);
+    expect(configuration.androidRelease.updatePolicy.minimumBuildNumber, '21');
+    expect(configuration.androidRelease.updatePolicy.revision, 3);
   });
 
   test('missing release configuration remains backward compatible', () {
@@ -37,5 +56,6 @@ void main() {
 
     expect(configuration.maintenance.blocksMobile, isFalse);
     expect(configuration.androidRelease.minimumSupportedVersion, isNull);
+    expect(configuration.androidRelease.updatePolicy.enabled, isFalse);
   });
 }
