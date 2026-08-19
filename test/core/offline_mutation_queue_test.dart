@@ -114,9 +114,9 @@ void main() {
     expect(quarantined.single.raw, '{not-json');
 
     final prefs = await SharedPreferences.getInstance();
-    final repaired = jsonDecode(
-      prefs.getString(OfflineMutationQueue.storageKey)!,
-    ) as Map<String, dynamic>;
+    final repaired =
+        jsonDecode(prefs.getString(OfflineMutationQueue.storageKey)!)
+            as Map<String, dynamic>;
     expect(repaired['version'], OfflineMutationQueue.envelopeVersion);
   });
 
@@ -141,39 +141,45 @@ void main() {
     expect(quarantined.single.raw, 'broken');
   });
 
-  test('backs off transient failures and retries only after due time', () async {
-    var now = DateTime.utc(2026, 8, 18, 12);
-    var executions = 0;
-    final queue = OfflineMutationQueue(
-      currentUserId: () => 'user-1',
-      now: () => now,
-      executeOverride: (_) async {
-        executions++;
-        if (executions == 1) throw Exception('offline');
-      },
-    );
-    await queue.enqueue(
-      id: 'sale-sale-1',
-      type: OfflineMutationType.saleComplete,
-      businessId: 'business-1',
-      payload: <String, dynamic>{},
-    );
+  test(
+    'backs off transient failures and retries only after due time',
+    () async {
+      var now = DateTime.utc(2026, 8, 18, 12);
+      var executions = 0;
+      final queue = OfflineMutationQueue(
+        currentUserId: () => 'user-1',
+        now: () => now,
+        executeOverride: (_) async {
+          executions++;
+          if (executions == 1) throw Exception('offline');
+        },
+      );
+      await queue.enqueue(
+        id: 'sale-sale-1',
+        type: OfflineMutationType.saleComplete,
+        businessId: 'business-1',
+        payload: <String, dynamic>{},
+      );
 
-    await queue.syncPending();
-    var pending = await queue.pending();
-    expect(executions, 1);
-    expect(pending.single.attemptCount, 1);
-    expect(pending.single.nextAttemptAt, now.add(const Duration(seconds: 30)));
+      await queue.syncPending();
+      var pending = await queue.pending();
+      expect(executions, 1);
+      expect(pending.single.attemptCount, 1);
+      expect(
+        pending.single.nextAttemptAt,
+        now.add(const Duration(seconds: 30)),
+      );
 
-    await queue.syncPending();
-    expect(executions, 1);
+      await queue.syncPending();
+      expect(executions, 1);
 
-    now = now.add(const Duration(seconds: 30));
-    await queue.syncPending();
-    pending = await queue.pending();
-    expect(executions, 2);
-    expect(pending, isEmpty);
-  });
+      now = now.add(const Duration(seconds: 30));
+      await queue.syncPending();
+      pending = await queue.pending();
+      expect(executions, 2);
+      expect(pending, isEmpty);
+    },
+  );
 
   test('quarantines terminal failures and removes them from pending', () async {
     final queue = OfflineMutationQueue(

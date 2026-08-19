@@ -51,17 +51,17 @@ class AppEmptyState extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 description,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: context.mutedTextColor,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: context.mutedTextColor),
               ),
               if (actionLabel != null && onAction != null) ...[
                 const SizedBox(height: AppSpacing.md),
@@ -139,17 +139,17 @@ class AppErrorState extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: context.mutedTextColor,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: context.mutedTextColor),
               ),
               const SizedBox(height: AppSpacing.md),
               if (onRetry != null)
@@ -171,7 +171,10 @@ class AppErrorState extends StatelessWidget {
 
 /// Compact offline / network banner.
 class OfflineBanner extends StatelessWidget {
-  const OfflineBanner({super.key, this.message = 'You are offline. Check your connection and try again.'});
+  const OfflineBanner({
+    super.key,
+    this.message = 'You are offline. Check your connection and try again.',
+  });
 
   final String message;
 

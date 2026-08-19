@@ -97,19 +97,18 @@ class OfflineMutationQuarantineEntry {
     this.error,
   });
 
-  factory OfflineMutationQuarantineEntry.fromJson(
-    Map<String, dynamic> json,
-  ) => OfflineMutationQuarantineEntry(
-    reason: json['reason'] as String,
-    quarantinedAt: DateTime.parse(json['quarantinedAt'] as String).toUtc(),
-    mutation: json['mutation'] == null
-        ? null
-        : OfflineMutation.fromJson(
-            Map<String, dynamic>.from(json['mutation'] as Map),
-          ),
-    raw: json['raw'],
-    error: json['error'] as String?,
-  );
+  factory OfflineMutationQuarantineEntry.fromJson(Map<String, dynamic> json) =>
+      OfflineMutationQuarantineEntry(
+        reason: json['reason'] as String,
+        quarantinedAt: DateTime.parse(json['quarantinedAt'] as String).toUtc(),
+        mutation: json['mutation'] == null
+            ? null
+            : OfflineMutation.fromJson(
+                Map<String, dynamic>.from(json['mutation'] as Map),
+              ),
+        raw: json['raw'],
+        error: json['error'] as String?,
+      );
 
   final String reason;
   final DateTime quarantinedAt;
@@ -147,6 +146,7 @@ class OfflineMutationQueue {
        _firestoreOverride = firestore,
        _apiOverride = apiClient,
        _pinataOverride = pinata,
+       // ignore: prefer_initializing_formals
        _executeOverride = executeOverride,
        _now = now ?? (() => DateTime.now().toUtc());
 
@@ -292,9 +292,7 @@ class OfflineMutationQueue {
   Duration _backoffFor(int attemptCount) {
     final exponent = (attemptCount - 1).clamp(0, 20);
     final seconds = _initialBackoff.inSeconds * (1 << exponent);
-    return Duration(
-      seconds: seconds.clamp(0, _maximumBackoff.inSeconds),
-    );
+    return Duration(seconds: seconds.clamp(0, _maximumBackoff.inSeconds));
   }
 
   bool _isTerminalError(Object error) {
@@ -316,7 +314,9 @@ class OfflineMutationQueue {
         'failed-precondition',
       }.contains(error.code);
     }
-    return error is StateError || error is FormatException || error is TypeError;
+    return error is StateError ||
+        error is FormatException ||
+        error is TypeError;
   }
 
   Future<void> _execute(OfflineMutation item) async {
@@ -397,15 +397,14 @@ class OfflineMutationQueue {
     return envelope;
   });
 
-  Future<void> _updateEnvelope(
-    void Function(_QueueEnvelope envelope) update,
-  ) => _withStorageLock(() async {
-    final prefs = await SharedPreferences.getInstance();
-    final envelope = _decodeEnvelope(prefs.getString(storageKey));
-    update(envelope);
-    await prefs.setString(storageKey, jsonEncode(envelope.toJson()));
-    if (!_changes.isClosed) _changes.add(null);
-  });
+  Future<void> _updateEnvelope(void Function(_QueueEnvelope envelope) update) =>
+      _withStorageLock(() async {
+        final prefs = await SharedPreferences.getInstance();
+        final envelope = _decodeEnvelope(prefs.getString(storageKey));
+        update(envelope);
+        await prefs.setString(storageKey, jsonEncode(envelope.toJson()));
+        if (!_changes.isClosed) _changes.add(null);
+      });
 
   Future<T> _withStorageLock<T>(Future<T> Function() operation) async {
     final previous = _storageBarrier;
@@ -512,20 +511,17 @@ class OfflineMutationQueue {
     return envelope;
   }
 
-  _QueueEnvelope _quarantineWholeRaw(
-    String raw,
-    DateTime now,
-    String reason,
-  ) => _QueueEnvelope(
-    quarantined: <OfflineMutationQuarantineEntry>[
-      OfflineMutationQuarantineEntry(
-        reason: reason,
-        quarantinedAt: now,
-        raw: raw,
-      ),
-    ],
-    needsWrite: true,
-  );
+  _QueueEnvelope _quarantineWholeRaw(String raw, DateTime now, String reason) =>
+      _QueueEnvelope(
+        quarantined: <OfflineMutationQuarantineEntry>[
+          OfflineMutationQuarantineEntry(
+            reason: reason,
+            quarantinedAt: now,
+            raw: raw,
+          ),
+        ],
+        needsWrite: true,
+      );
 }
 
 class _QueueEnvelope {

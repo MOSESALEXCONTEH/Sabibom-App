@@ -35,7 +35,7 @@ class AuthRepository {
         throw const AuthFailure('Google sign-in could not be completed.');
       }
       await _syncGoogleProfile(user, account);
-      return _toAppUser(user);
+      return await _toAppUser(user);
     } on GoogleSignInException catch (error) {
       if (error.code == GoogleSignInExceptionCode.canceled ||
           error.code == GoogleSignInExceptionCode.interrupted) {
@@ -80,7 +80,7 @@ class AuthRepository {
         email: facebookData['email'] as String? ?? user.email,
         photoUrl: _facebookPhotoUrl(facebookData) ?? user.photoURL,
       );
-      return _toAppUser(user);
+      return await _toAppUser(user);
     } on FirebaseAuthException catch (error) {
       throw AuthFailure.fromFirebase(error);
     } catch (error) {
@@ -98,7 +98,7 @@ class AuthRepository {
         email: email.trim(),
         password: password,
       );
-      return _toAppUser(result.user!);
+      return await _toAppUser(result.user!);
     } on FirebaseAuthException catch (error) {
       throw AuthFailure.fromFirebase(error);
     }
@@ -125,7 +125,7 @@ class AuthRepository {
           provider: 'password',
         ),
       );
-      return _toAppUser(user);
+      return await _toAppUser(user);
     } on FirebaseAuthException catch (error) {
       throw AuthFailure.fromFirebase(error);
     }

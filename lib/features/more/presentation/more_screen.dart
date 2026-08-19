@@ -317,10 +317,7 @@ class MoreScreen extends ConsumerWidget {
     if (context.mounted) context.go(AppRoutes.onboarding);
   }
 
-  Future<void> _showPrivacyOptions(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _showPrivacyOptions(BuildContext context, WidgetRef ref) async {
     final error = await ref
         .read(adConsentControllerProvider)
         .showPrivacyOptions();

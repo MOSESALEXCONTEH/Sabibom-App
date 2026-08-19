@@ -16,10 +16,9 @@ class AuthenticatedApiClient {
     FirebaseAuth? auth,
     http.Client? httpClient,
     Future<PackageInfo> Function()? packageInfoLoader,
-  })
-    : _auth = auth ?? FirebaseAuth.instance,
-      _http = httpClient ?? http.Client(),
-      _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform;
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _http = httpClient ?? http.Client(),
+       _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform;
 
   final FirebaseAuth _auth;
   final http.Client _http;

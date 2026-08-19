@@ -78,14 +78,8 @@ void main() {
     expect(required(policy(effectiveEnabled: false)), isFalse);
     expect(required(policy(minimum: 'not-a-build')), isFalse);
     expect(required(policy(environment: 'preview')), isFalse);
-    expect(
-      required(policy(effectiveAt: DateTime.utc(2026, 8, 19))),
-      isFalse,
-    );
-    expect(
-      required(policy(expiresAt: DateTime.utc(2026, 8, 17))),
-      isFalse,
-    );
+    expect(required(policy(effectiveAt: DateTime.utc(2026, 8, 19))), isFalse);
+    expect(required(policy(expiresAt: DateTime.utc(2026, 8, 17))), isFalse);
   });
 
   test('rejects a minimum build above the latest build', () {

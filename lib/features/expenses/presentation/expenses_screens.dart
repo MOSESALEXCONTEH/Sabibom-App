@@ -1071,8 +1071,7 @@ class _ExpenseCategoriesScreenState
           if (list.isEmpty) {
             return AppEmptyState(
               title: 'No expense categories',
-              description:
-                  'Add a category to keep expense reports organized.',
+              description: 'Add a category to keep expense reports organized.',
               icon: Icons.category_outlined,
               actionLabel: 'Add Category',
               actionIcon: Icons.add,
