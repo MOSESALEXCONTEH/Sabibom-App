@@ -64,6 +64,21 @@ void main() {
       expect(complimentary.toMap(), pro.toMap());
     });
 
+    test('global free access unlocks Pro tools but retains ads', () {
+      final entitlements = BusinessEntitlements.globalFreeAccess();
+
+      expect(entitlements.tier, BillingTier.free);
+      expect(
+        entitlements.isUnlimited(BillingEntitlementKeys.branchesMax),
+        isTrue,
+      );
+      expect(
+        entitlements.isEnabled(BillingEntitlementKeys.reportsAdvanced),
+        isTrue,
+      );
+      expect(entitlements.isEnabled(BillingEntitlementKeys.adsEnabled), isTrue);
+    });
+
     test('stored values override defaults and unknown keys are ignored', () {
       final entitlements = BusinessEntitlements.fromMap(
         tier: BillingTier.free,

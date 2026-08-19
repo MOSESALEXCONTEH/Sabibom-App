@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/user_profile_provider.dart';
+import '../../maintenance/data/runtime_configuration_repository.dart';
 import '../domain/billing_models.dart';
 import '../domain/billing_resolution.dart';
 
@@ -41,42 +42,57 @@ final activeSubscriptionPlansProvider = StreamProvider<List<SubscriptionPlan>>(
 
 final currentBusinessEntitlementsProvider =
     Provider<AsyncValue<ResolvedBusinessEntitlements>>((ref) {
+      final globalFreeAccess =
+          ref
+              .watch(runtimeConfigurationProvider)
+              .asData
+              ?.value
+              .billing
+              .globalFreeAccessEnabled ??
+          false;
+      AsyncValue<ResolvedBusinessEntitlements> applyPolicy(
+        AsyncValue<ResolvedBusinessEntitlements> value,
+      ) => globalFreeAccess
+          ? value.whenData((resolved) => resolved.withGlobalFreeAccess())
+          : value;
       final subscription = ref.watch(currentBusinessSubscriptionProvider);
-      return subscription.when(
-        loading: () => const AsyncLoading(),
-        error: AsyncError.new,
-        data: (value) {
-          if (value == null || !value.hasAccessAt(DateTime.now())) {
-            return AsyncData(
-              ResolvedBusinessEntitlements.resolve(
-                subscription: value,
-                plans: const <SubscriptionPlan>[],
-              ),
-            );
-          }
-
-          return ref
-              .watch(activeSubscriptionPlansProvider)
-              .when(
-                loading: () => AsyncData(
-                  ResolvedBusinessEntitlements.resolve(
-                    subscription: value,
-                    plans: const <SubscriptionPlan>[],
-                  ),
-                ),
-                error: (_, _) => AsyncData(
-                  ResolvedBusinessEntitlements.resolve(
-                    subscription: value,
-                    plans: const <SubscriptionPlan>[],
-                  ),
-                ),
-                data: (plans) => AsyncData(
-                  ResolvedBusinessEntitlements.resolve(
-                    subscription: value,
-                    plans: plans,
-                  ),
+      return applyPolicy(
+        subscription.when(
+          loading: () => const AsyncLoading(),
+          error: AsyncError.new,
+          data: (value) {
+            if (value == null || !value.hasAccessAt(DateTime.now())) {
+              return AsyncData(
+                ResolvedBusinessEntitlements.resolve(
+                  subscription: value,
+                  plans: const <SubscriptionPlan>[],
                 ),
               );
-        },
+            }
+
+            return ref
+                .watch(activeSubscriptionPlansProvider)
+                .when(
+                  loading: () => AsyncData(
+                    ResolvedBusinessEntitlements.resolve(
+                      subscription: value,
+                      plans: const <SubscriptionPlan>[],
+                    ),
+                  ),
+                  error: (_, _) => AsyncData(
+                    ResolvedBusinessEntitlements.resolve(
+                      subscription: value,
+                      plans: const <SubscriptionPlan>[],
+                    ),
+                  ),
+                  data: (plans) => AsyncData(
+                    ResolvedBusinessEntitlements.resolve(
+                      subscription: value,
+                      plans: plans,
+                    ),
+                  ),
+                );
+          },
+        ),
       );
     });

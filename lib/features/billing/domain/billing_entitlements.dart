@@ -59,6 +59,16 @@ class BusinessEntitlements {
     );
   }
 
+  factory BusinessEntitlements.globalFreeAccess() {
+    return BusinessEntitlements._(
+      BillingTier.free,
+      Map.unmodifiable(<String, Object>{
+        ..._proValues,
+        BillingEntitlementKeys.adsEnabled: true,
+      }),
+    );
+  }
+
   static const unlimited = -1;
 
   static const _freeValues = <String, Object>{

@@ -4,6 +4,14 @@ import 'package:sabibom/features/maintenance/domain/runtime_configuration.dart';
 void main() {
   test('parses maintenance and Android release configuration', () {
     final configuration = RuntimeConfiguration.fromMap({
+      'billing': {
+        'schemaVersion': 1,
+        'globalFreeAccessEnabled': true,
+        'adsEnabled': true,
+        'purchasesEnabled': false,
+        'message': 'Launch access is active.',
+        'revision': 2,
+      },
       'maintenance': {
         'enabled': true,
         'effectiveEnabled': true,
@@ -38,6 +46,10 @@ void main() {
     });
 
     expect(configuration.maintenance.blocksMobile, isTrue);
+    expect(configuration.billing.globalFreeAccessEnabled, isTrue);
+    expect(configuration.billing.adsEnabled, isTrue);
+    expect(configuration.billing.purchasesEnabled, isFalse);
+    expect(configuration.billing.revision, 2);
     expect(configuration.androidRelease.latestVersion, '2.4.0');
     expect(configuration.androidRelease.minimumSupportedVersion, '2.1.0');
     expect(
@@ -55,6 +67,8 @@ void main() {
     });
 
     expect(configuration.maintenance.blocksMobile, isFalse);
+    expect(configuration.billing.globalFreeAccessEnabled, isFalse);
+    expect(configuration.billing.purchasesEnabled, isTrue);
     expect(configuration.androidRelease.minimumSupportedVersion, isNull);
     expect(configuration.androidRelease.updatePolicy.enabled, isFalse);
   });

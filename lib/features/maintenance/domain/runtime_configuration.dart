@@ -37,6 +37,50 @@ class RuntimeMaintenanceConfiguration {
   }
 }
 
+class RuntimeBillingAccessPolicy {
+  const RuntimeBillingAccessPolicy({
+    this.schemaVersion,
+    this.globalFreeAccessEnabled = false,
+    this.adsEnabled = true,
+    this.purchasesEnabled = true,
+    this.message = 'Choose the plan that fits your business.',
+    this.revision = 0,
+    this.updatedAt,
+  });
+
+  final int? schemaVersion;
+  final bool globalFreeAccessEnabled;
+  final bool adsEnabled;
+  final bool purchasesEnabled;
+  final String message;
+  final int revision;
+  final DateTime? updatedAt;
+
+  factory RuntimeBillingAccessPolicy.fromMap(Map<String, dynamic> data) {
+    final globalAccess =
+        data['schemaVersion'] == 1 && data['globalFreeAccessEnabled'] == true;
+    final message = data['message'];
+    final updatedAt = data['updatedAt'];
+    return RuntimeBillingAccessPolicy(
+      schemaVersion: (data['schemaVersion'] as num?)?.toInt(),
+      globalFreeAccessEnabled: globalAccess,
+      adsEnabled: globalAccess ? true : data['adsEnabled'] != false,
+      purchasesEnabled: globalAccess
+          ? false
+          : data['purchasesEnabled'] != false,
+      message: message is String && message.trim().isNotEmpty
+          ? message.trim()
+          : globalAccess
+          ? 'All SabiBom features are currently available free with ads.'
+          : 'Choose the plan that fits your business.',
+      revision: (data['revision'] as num?)?.toInt() ?? 0,
+      updatedAt: updatedAt is String
+          ? DateTime.tryParse(updatedAt)?.toLocal()
+          : null,
+    );
+  }
+}
+
 class RuntimeAndroidUpdatePolicy {
   const RuntimeAndroidUpdatePolicy({
     this.schemaVersion,
@@ -141,19 +185,25 @@ class RuntimeAndroidRelease {
 class RuntimeConfiguration {
   const RuntimeConfiguration({
     required this.maintenance,
+    this.billing = const RuntimeBillingAccessPolicy(),
     this.androidRelease = const RuntimeAndroidRelease(),
   });
 
   final RuntimeMaintenanceConfiguration maintenance;
+  final RuntimeBillingAccessPolicy billing;
   final RuntimeAndroidRelease androidRelease;
 
   factory RuntimeConfiguration.fromMap(Map<String, dynamic> data) {
     final raw = data['maintenance'];
+    final billing = data['billing'];
     final release = data['release'];
     final android = release is Map ? release['android'] : null;
     return RuntimeConfiguration(
       maintenance: RuntimeMaintenanceConfiguration.fromMap(
         raw is Map ? Map<String, dynamic>.from(raw) : const {},
+      ),
+      billing: RuntimeBillingAccessPolicy.fromMap(
+        billing is Map ? Map<String, dynamic>.from(billing) : const {},
       ),
       androidRelease: RuntimeAndroidRelease.fromMap(
         android is Map ? Map<String, dynamic>.from(android) : const {},

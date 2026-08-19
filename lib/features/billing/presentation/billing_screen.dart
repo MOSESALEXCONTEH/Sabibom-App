@@ -12,6 +12,8 @@ import '../../../core/formatting/currency_formatter.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../dashboard/application/dashboard_providers.dart';
+import '../../maintenance/data/runtime_configuration_repository.dart';
+import '../../maintenance/domain/runtime_configuration.dart';
 import '../application/billing_providers.dart';
 import '../data/play_billing_service.dart';
 import '../domain/billing_entitlements.dart';
@@ -50,6 +52,9 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   Widget build(BuildContext context) {
     final access = ref.watch(currentBusinessEntitlementsProvider);
     final plans = ref.watch(activeSubscriptionPlansProvider);
+    final billingPolicy =
+        ref.watch(runtimeConfigurationProvider).asData?.value.billing ??
+        const RuntimeBillingAccessPolicy();
     final activeBusiness = ref.watch(activeBusinessProvider).asData?.value;
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     final isOwner = switch (activeBusiness) {
@@ -90,6 +95,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
               ),
               data: (value) => _AccessCard(
                 access: value,
+                globalFreeAccess: billingPolicy.globalFreeAccessEnabled,
                 onManage:
                     isOwner &&
                         (value.plan?.googlePlayProductId.isNotEmpty ?? false)
@@ -98,45 +104,66 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
-            Text(
-              'Available plans',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            plans.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Text('Plans are unavailable: $error'),
-              data: (items) {
-                _ensureStoreProducts(items);
-                return items.isEmpty
-                    ? const AppEmptyState(
-                        title: 'No active plans',
-                        description: 'Active plans will appear here.',
-                      )
-                    : Column(
-                        children: items
-                            .map(
-                              (plan) => Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppSpacing.md,
+            if (billingPolicy.globalFreeAccessEnabled) ...<Widget>[
+              Text(
+                'Pro purchases are paused',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  billingPolicy.message,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            ] else ...<Widget>[
+              Text(
+                'Available plans',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              plans.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Text('Plans are unavailable: $error'),
+                data: (items) {
+                  _ensureStoreProducts(items);
+                  return items.isEmpty
+                      ? const AppEmptyState(
+                          title: 'No active plans',
+                          description: 'Active plans will appear here.',
+                        )
+                      : Column(
+                          children: items
+                              .map(
+                                (plan) => Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.md,
+                                  ),
+                                  child: _PlanCard(
+                                    plan: plan,
+                                    storePrice:
+                                        _storeProducts[plan.googlePlayProductId]
+                                            ?.price,
+                                    canPurchase: isOwner,
+                                    busy:
+                                        _busyProductId ==
+                                        plan.googlePlayProductId,
+                                    onPurchase: () => _purchase(plan),
+                                  ),
                                 ),
-                                child: _PlanCard(
-                                  plan: plan,
-                                  storePrice:
-                                      _storeProducts[plan.googlePlayProductId]
-                                          ?.price,
-                                  canPurchase: isOwner,
-                                  busy:
-                                      _busyProductId ==
-                                      plan.googlePlayProductId,
-                                  onPurchase: () => _purchase(plan),
-                                ),
-                              ),
-                            )
-                            .toList(growable: false),
-                      );
-              },
-            ),
+                              )
+                              .toList(growable: false),
+                        );
+                },
+              ),
+            ],
           ],
         ),
       ),
@@ -289,8 +316,13 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
 }
 
 class _AccessCard extends StatelessWidget {
-  const _AccessCard({required this.access, this.onManage});
+  const _AccessCard({
+    required this.access,
+    required this.globalFreeAccess,
+    this.onManage,
+  });
   final ResolvedBusinessEntitlements access;
+  final bool globalFreeAccess;
   final VoidCallback? onManage;
 
   @override
@@ -298,11 +330,15 @@ class _AccessCard extends StatelessWidget {
     final subscription = access.subscription;
     final color = access.wasDowngraded ? Colors.orange : Colors.green;
     final end = subscription?.accessEnd;
-    final tierName = switch (access.tier) {
-      BillingTier.free => 'Free',
-      BillingTier.pro => 'Pro',
-      BillingTier.complimentary => 'Complimentary',
-    };
+    final tierName =
+        globalFreeAccess &&
+            access.source == EntitlementResolutionSource.globalFreeAccess
+        ? 'Free access with ads'
+        : switch (access.tier) {
+            BillingTier.free => 'Free plan',
+            BillingTier.pro => 'Pro plan',
+            BillingTier.complimentary => 'Complimentary plan',
+          };
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -324,7 +360,7 @@ class _AccessCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  '$tierName plan',
+                  tierName,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

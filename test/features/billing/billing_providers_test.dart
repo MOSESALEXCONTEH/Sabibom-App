@@ -6,6 +6,15 @@ import 'package:sabibom/features/billing/domain/billing_entitlements.dart';
 import 'package:sabibom/features/billing/domain/billing_models.dart';
 import 'package:sabibom/features/billing/domain/billing_resolution.dart';
 import 'package:sabibom/features/billing/presentation/billing_gate.dart';
+import 'package:sabibom/features/maintenance/data/runtime_configuration_repository.dart';
+import 'package:sabibom/features/maintenance/domain/runtime_configuration.dart';
+
+const _maintenanceOff = RuntimeMaintenanceConfiguration(
+  enabled: false,
+  effectiveEnabled: false,
+  scope: 'all',
+  message: '',
+);
 
 void main() {
   test('active paid access remains Pro while plan catalog is loading', () {
@@ -60,6 +69,47 @@ void main() {
       expect(resolved.requireValue.tier, BillingTier.free);
     },
   );
+
+  test('global policy unlocks Free entitlements and retains ads', () {
+    final container = ProviderContainer(
+      overrides: [
+        runtimeConfigurationProvider.overrideWithValue(
+          const AsyncData(
+            RuntimeConfiguration(
+              maintenance: _maintenanceOff,
+              billing: RuntimeBillingAccessPolicy(
+                schemaVersion: 1,
+                globalFreeAccessEnabled: true,
+                purchasesEnabled: false,
+              ),
+            ),
+          ),
+        ),
+        currentBusinessSubscriptionProvider.overrideWithValue(
+          const AsyncData(null),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final resolved = container.read(currentBusinessEntitlementsProvider);
+    expect(
+      resolved.requireValue.source,
+      EntitlementResolutionSource.globalFreeAccess,
+    );
+    expect(
+      resolved.requireValue.entitlements.isUnlimited(
+        BillingEntitlementKeys.branchesMax,
+      ),
+      isTrue,
+    );
+    expect(
+      resolved.requireValue.entitlements.isEnabled(
+        BillingEntitlementKeys.adsEnabled,
+      ),
+      isTrue,
+    );
+  });
 
   testWidgets('Free report history hides records older than 30 days', (
     tester,
