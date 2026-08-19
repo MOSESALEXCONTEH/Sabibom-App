@@ -23,8 +23,9 @@ class _NotificationsSettingsScreenState
     extends ConsumerState<NotificationsSettingsScreen> {
   NotificationPreferences _draft = const NotificationPreferences();
   NotificationPreferences _saved = const NotificationPreferences();
-  var _hydrated = false;
+  Object? _hydratedScope = _unhydratedScope;
   var _saving = false;
+  static const _unhydratedScope = Object();
 
   bool get _dirty =>
       _draft.inAppEnabled != _saved.inAppEnabled ||
@@ -56,6 +57,9 @@ class _NotificationsSettingsScreenState
     final currencySymbol = activeBusiness is ActiveBusinessData
         ? activeBusiness.business.currency.symbol
         : null;
+    final businessId = activeBusiness is ActiveBusinessData
+        ? activeBusiness.business.businessId
+        : null;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       return const Scaffold(
@@ -65,15 +69,20 @@ class _NotificationsSettingsScreenState
 
     final canManage = true; // Personal preferences — always editable by owner.
 
-    final prefsAsync = ref.watch(notificationPreferencesProvider);
+    final prefsAsync = ref.watch(notificationPreferencesProvider(businessId));
     prefsAsync.whenData((prefs) {
-      if (!_hydrated) {
+      if (_hydratedScope != businessId) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || _hydrated) return;
+          if (!mounted || _hydratedScope == businessId) return;
+          final current = ref.read(activeBusinessProvider).asData?.value;
+          final currentBusinessId = current is ActiveBusinessData
+              ? current.business.businessId
+              : null;
+          if (currentBusinessId != businessId) return;
           setState(() {
             _draft = prefs;
             _saved = prefs;
-            _hydrated = true;
+            _hydratedScope = businessId;
           });
         });
       }
@@ -414,16 +423,27 @@ class _NotificationsSettingsScreenState
           .read(notificationsRepositoryProvider)
           .savePreferences(userId: uid, businessId: businessId, prefs: _draft);
       final push = ref.read(pushNotificationBootstrapProvider);
+      PushRegistrationResult? registrationResult;
       if (_draft.pushEnabled) {
-        await push.registerCurrentUserToken();
+        registrationResult = await push.registerCurrentUserToken();
       } else {
         await push.unregisterCurrentUserToken();
       }
       await SetupChecklistService().markNotificationPrefsSaved();
       if (!mounted) return;
       setState(() => _saved = _draft);
+      final needsDeviceSetup =
+          registrationResult == PushRegistrationResult.permissionDenied ||
+          registrationResult == PushRegistrationResult.unavailable ||
+          registrationResult == PushRegistrationResult.failed;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notification preferences saved.')),
+        SnackBar(
+          content: Text(
+            needsDeviceSetup
+                ? 'Preferences saved, but device notifications still need permission or setup.'
+                : 'Notification preferences saved.',
+          ),
+        ),
       );
     } catch (error) {
       if (!mounted) return;

@@ -27,6 +27,8 @@ class NotifyingExpensesRepository implements ExpensesRepository {
         entityId: id,
         reference: draft.description,
         pendingSync: queueWhenOffline,
+        businessId: businessId,
+        branchId: branchId,
       ),
     );
     return id;

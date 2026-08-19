@@ -156,6 +156,21 @@ enum AppNotificationType {
     NotificationCategory.suppliers,
     NotificationPriority.high,
   ),
+  saleRecorded(
+    'sale_recorded',
+    NotificationCategory.sales,
+    NotificationPriority.normal,
+  ),
+  expenseRecorded(
+    'expense_recorded',
+    NotificationCategory.expenses,
+    NotificationPriority.normal,
+  ),
+  purchaseRecorded(
+    'purchase_recorded',
+    NotificationCategory.suppliers,
+    NotificationPriority.normal,
+  ),
   approvalRequested(
     'approval_requested',
     NotificationCategory.approvals,

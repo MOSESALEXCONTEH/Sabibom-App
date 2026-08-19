@@ -481,14 +481,13 @@ final unreadNotificationsCountProvider = Provider<int>((ref) {
   return ref.watch(unreadNotificationCountProvider).asData?.value ?? 0;
 });
 
-final notificationPreferencesProvider = StreamProvider<NotificationPreferences>(
-  (ref) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      return Stream.value(const NotificationPreferences());
-    }
-    return ref
-        .watch(notificationsRepositoryProvider)
-        .watchPreferences(userId: uid);
-  },
-);
+final notificationPreferencesProvider =
+    StreamProvider.family<NotificationPreferences, String?>((ref, businessId) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        return Stream.value(const NotificationPreferences());
+      }
+      return ref
+          .watch(notificationsRepositoryProvider)
+          .watchPreferences(userId: uid, businessId: businessId);
+    });

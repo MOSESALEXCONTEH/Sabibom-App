@@ -38,4 +38,24 @@ void main() {
       }
     },
   );
+
+  test('Android manifest configures notification permission and channel', () {
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+
+    expect(
+      manifest,
+      contains('android:name="android.permission.POST_NOTIFICATIONS"'),
+    );
+    final channelMetadata = RegExp(
+      '<meta-data\\s+[^>]*android:name="com\\.google\\.firebase\\.messaging\\.default_notification_channel_id"[^>]*/>',
+      multiLine: true,
+    ).firstMatch(manifest);
+    expect(channelMetadata, isNotNull);
+    expect(
+      channelMetadata!.group(0),
+      contains('android:value="sabibom_general"'),
+    );
+  });
 }

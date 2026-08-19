@@ -17,6 +17,8 @@ class NotifyingPurchasesRepository implements PurchasesRepository {
         entityId: purchase.purchaseId,
         reference: 'Purchase ${purchase.purchaseNumber}',
         pendingSync: request.queueWhenOffline,
+        businessId: purchase.businessId,
+        branchId: purchase.branchId,
       ),
     );
     return purchase;

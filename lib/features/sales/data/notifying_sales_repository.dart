@@ -17,6 +17,8 @@ class NotifyingSalesRepository implements SalesRepository {
         entityId: sale.saleId,
         reference: 'Receipt ${sale.receiptNumber}',
         pendingSync: sale.isPendingSync,
+        businessId: sale.businessId,
+        branchId: sale.branchId,
       ),
     );
     return sale;

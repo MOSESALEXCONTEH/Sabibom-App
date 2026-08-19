@@ -51,6 +51,14 @@ abstract final class SabibomNotificationChannels {
   );
 }
 
+enum PushRegistrationResult {
+  registered,
+  disabled,
+  permissionDenied,
+  unavailable,
+  failed,
+}
+
 /// Registers the device FCM token and Android notification channels.
 class PushNotificationBootstrap {
   factory PushNotificationBootstrap() => _instance;
@@ -76,13 +84,13 @@ class PushNotificationBootstrap {
   final Set<String> _registrationsInProgress = <String>{};
   var _initialMessageChecked = false;
 
-  Future<void> registerCurrentUserToken() async {
+  Future<PushRegistrationResult> registerCurrentUserToken() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) return PushRegistrationResult.unavailable;
       if (!await _pushEnabledForUser(user.uid)) {
         await unregisterCurrentUserToken();
-        return;
+        return PushRegistrationResult.disabled;
       }
 
       await _ensureInitialized();
@@ -95,7 +103,7 @@ class PushNotificationBootstrap {
       );
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
-        return;
+        return PushRegistrationResult.permissionDenied;
       }
 
       if (!kIsWeb && Platform.isIOS) {
@@ -108,16 +116,22 @@ class PushNotificationBootstrap {
       }
 
       final token = await messaging.getToken();
-      if (token == null || token.isEmpty) return;
-      await _registerTokenIfChanged(user.uid, token);
+      if (token == null || token.isEmpty) {
+        return PushRegistrationResult.unavailable;
+      }
+      if (!await _registerTokenIfChanged(user.uid, token)) {
+        return PushRegistrationResult.failed;
+      }
       _listenForTokenRefresh();
       _listenForConnectivity();
       _listenForNotificationOpens();
       _foregroundSubscription ??= FirebaseMessaging.onMessage.listen(
         _showForegroundIfNeeded,
       );
+      return PushRegistrationResult.registered;
     } catch (_) {
       // Notification registration is best-effort and must not affect auth.
+      return PushRegistrationResult.failed;
     }
   }
 
@@ -186,12 +200,13 @@ class PushNotificationBootstrap {
     }
   }
 
-  Future<void> _registerTokenIfChanged(String uid, String token) async {
+  Future<bool> _registerTokenIfChanged(String uid, String token) async {
     final prefs = await SharedPreferences.getInstance();
     final key = '$_registeredTokenPrefix$uid';
-    if (prefs.getString(key) == token) return;
+    final previousToken = prefs.getString(key);
+    if (previousToken == token) return true;
     final registrationKey = '$uid:$token';
-    if (!_registrationsInProgress.add(registrationKey)) return;
+    if (!_registrationsInProgress.add(registrationKey)) return false;
 
     try {
       final info = await PackageInfo.fromPlatform();
@@ -205,19 +220,49 @@ class PushNotificationBootstrap {
         },
       );
       await prefs.setString(key, token);
+      if (previousToken != null && previousToken.isNotEmpty) {
+        await _unregisterToken(previousToken);
+      }
+      return true;
     } catch (_) {
       // The connectivity listener and subsequent lifecycle triggers retry.
+      return false;
     } finally {
       _registrationsInProgress.remove(registrationKey);
+    }
+  }
+
+  Future<void> _unregisterToken(String token) async {
+    try {
+      await _apiClient.postJson(
+        '/api/notifications/unregister-device',
+        body: <String, dynamic>{'token': token, 'platform': _platform()},
+        timeout: const Duration(seconds: 5),
+      );
+    } catch (_) {
+      // Token rotation cleanup is best-effort.
     }
   }
 
   void _listenForTokenRefresh() {
     _tokenRefreshSubscription ??= FirebaseMessaging.instance.onTokenRefresh
         .listen((token) async {
-          final user = FirebaseAuth.instance.currentUser;
-          if (user == null || token.isEmpty) return;
-          await _registerTokenIfChanged(user.uid, token);
+          try {
+            final user = FirebaseAuth.instance.currentUser;
+            if (user == null || token.isEmpty) return;
+            if (!await _pushEnabledForUser(user.uid)) return;
+            final settings = await FirebaseMessaging.instance
+                .getNotificationSettings();
+            if (settings.authorizationStatus !=
+                    AuthorizationStatus.authorized &&
+                settings.authorizationStatus !=
+                    AuthorizationStatus.provisional) {
+              return;
+            }
+            await _registerTokenIfChanged(user.uid, token);
+          } catch (_) {
+            // Refresh registration is best-effort and retries later.
+          }
         });
   }
 
