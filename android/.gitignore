@@ -4,6 +4,7 @@ gradle-wrapper.jar
 /gradlew
 /gradlew.bat
 /local.properties
+admob.properties
 GeneratedPluginRegistrant.java
 .cxx/
 

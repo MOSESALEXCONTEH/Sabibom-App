@@ -6,13 +6,13 @@ SabiBom uses Google Mobile Ads with the Google User Messaging Platform (UMP). Th
 
 Android release builds require the production AdMob application ID through the Gradle property `SABIBOM_ADMOB_APP_ID`. The build intentionally fails if this property is missing or still contains Google's sample application ID.
 
-Store the value outside source control in either `android/gradle.properties` or the user-level Gradle file at `~/.gradle/gradle.properties`:
+Store the value outside source control in `android/admob.properties`, `android/gradle.properties`, or the user-level Gradle file at `~/.gradle/gradle.properties`:
 
 ```properties
 SABIBOM_ADMOB_APP_ID=ca-app-pub-<publisher-id>~<app-id>
 ```
 
-The Android manifest receives this value through the `sabibomAdmobAppId` placeholder. Debug builds continue to use Google's sample application ID when no property is configured.
+The project-specific `android/admob.properties` file is ignored by Git. The Android manifest receives this value through the `sabibomAdmobAppId` placeholder. Debug builds continue to use Google's sample application ID when no property is configured.
 
 ## Production banner unit
 
