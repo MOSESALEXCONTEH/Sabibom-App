@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/formatting/currency_formatter.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_status_views.dart';
 import '../../dashboard/application/dashboard_providers.dart';
@@ -61,115 +62,41 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       ActiveBusinessData(:final business) => business.ownerId == currentUid,
       _ => false,
     };
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Plans & Billing'),
-        actions: <Widget>[
-          if (isOwner)
-            TextButton(
-              onPressed: _busyProductId == null ? _restorePurchases : null,
-              child: const Text('Restore'),
-            ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(runtimeConfigurationProvider);
-          ref.invalidate(currentBusinessSubscriptionProvider);
-          ref.invalidate(activeSubscriptionPlansProvider);
-          await ref.read(runtimeConfigurationProvider.future);
-        },
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            40,
-          ),
-          children: <Widget>[
-            access.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => AppErrorState(
-                title: 'Could not load billing',
-                message: '$error',
-                onRetry: () =>
-                    ref.invalidate(currentBusinessSubscriptionProvider),
-              ),
-              data: (value) => _AccessCard(
-                access: value,
-                globalFreeAccess: billingPolicy.globalFreeAccessEnabled,
-                onManage:
-                    isOwner &&
-                        (value.plan?.googlePlayProductId.isNotEmpty ?? false)
-                    ? () => _manageSubscription(value.plan!.googlePlayProductId)
-                    : null,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            if (billingPolicy.globalFreeAccessEnabled) ...<Widget>[
-              Text(
-                'Pro purchases are paused',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  billingPolicy.message,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
-            ] else ...<Widget>[
-              Text(
-                'Available plans',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              plans.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Text('Plans are unavailable: $error'),
-                data: (items) {
-                  _ensureStoreProducts(items);
-                  return items.isEmpty
-                      ? const AppEmptyState(
-                          title: 'No active plans',
-                          description: 'Active plans will appear here.',
-                        )
-                      : Column(
-                          children: items
-                              .map(
-                                (plan) => Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.md,
-                                  ),
-                                  child: _PlanCard(
-                                    plan: plan,
-                                    storePrice:
-                                        _storeProducts[plan.googlePlayProductId]
-                                            ?.price,
-                                    canPurchase: isOwner,
-                                    busy:
-                                        _busyProductId ==
-                                        plan.googlePlayProductId,
-                                    onPurchase: () => _purchase(plan),
-                                  ),
-                                ),
-                              )
-                              .toList(growable: false),
-                        );
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
+
+    if (!billingPolicy.globalFreeAccessEnabled && plans.hasValue) {
+      _ensureStoreProducts(plans.requireValue);
+    }
+
+    return BillingScreenContent(
+      globalFreeAccess: billingPolicy.globalFreeAccessEnabled,
+      policyMessage: billingPolicy.message,
+      purchasesEnabled: billingPolicy.purchasesEnabled,
+      isOwner: isOwner,
+      plans: plans,
+      access: access,
+      storePrices: <String, String>{
+        for (final entry in _storeProducts.entries)
+          entry.key: entry.value.price,
+      },
+      busyProductId: _busyProductId,
+      onRefresh: _refreshAll,
+      onRestore: isOwner ? _restorePurchases : null,
+      onPurchase: _purchase,
+      onManage: _manageSubscription,
+      onRetryAccess: () {
+        ref.invalidate(currentBusinessSubscriptionProvider);
+      },
+      onRetryPlans: () {
+        ref.invalidate(activeSubscriptionPlansProvider);
+      },
     );
+  }
+
+  Future<void> _refreshAll() async {
+    ref.invalidate(runtimeConfigurationProvider);
+    ref.invalidate(currentBusinessSubscriptionProvider);
+    ref.invalidate(activeSubscriptionPlansProvider);
+    await ref.read(runtimeConfigurationProvider.future);
   }
 
   Future<void> _purchase(SubscriptionPlan plan) async {
@@ -317,97 +244,677 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   }
 }
 
-class _AccessCard extends StatelessWidget {
-  const _AccessCard({
-    required this.access,
+/// Testable presentation surface for Plans & Billing. It intentionally has no
+/// Firebase dependencies; [BillingScreen] owns all purchase orchestration.
+@visibleForTesting
+class BillingScreenContent extends StatefulWidget {
+  const BillingScreenContent({
     required this.globalFreeAccess,
-    this.onManage,
+    required this.policyMessage,
+    required this.purchasesEnabled,
+    required this.isOwner,
+    required this.plans,
+    required this.access,
+    required this.onRefresh,
+    required this.onPurchase,
+    required this.onManage,
+    required this.onRetryAccess,
+    required this.onRetryPlans,
+    this.storePrices = const <String, String>{},
+    this.busyProductId,
+    this.onRestore,
+    super.key,
   });
-  final ResolvedBusinessEntitlements access;
+
   final bool globalFreeAccess;
-  final VoidCallback? onManage;
+  final String policyMessage;
+  final bool purchasesEnabled;
+  final bool isOwner;
+  final AsyncValue<List<SubscriptionPlan>> plans;
+  final AsyncValue<ResolvedBusinessEntitlements> access;
+  final Map<String, String> storePrices;
+  final String? busyProductId;
+  final AsyncCallback onRefresh;
+  final VoidCallback? onRestore;
+  final ValueChanged<SubscriptionPlan> onPurchase;
+  final ValueChanged<String> onManage;
+  final VoidCallback onRetryAccess;
+  final VoidCallback onRetryPlans;
+
+  @override
+  State<BillingScreenContent> createState() => _BillingScreenContentState();
+}
+
+class _BillingScreenContentState extends State<BillingScreenContent> {
+  String? _selectedInterval;
 
   @override
   Widget build(BuildContext context) {
-    final subscription = access.subscription;
-    final color = access.wasDowngraded ? Colors.orange : Colors.green;
-    final end = subscription?.accessEnd;
-    final tierName =
-        globalFreeAccess &&
-            access.source == EntitlementResolutionSource.globalFreeAccess
-        ? 'Free access with ads'
-        : switch (access.tier) {
-            BillingTier.free => 'Free plan',
-            BillingTier.pro => 'Pro plan',
-            BillingTier.complimentary => 'Complimentary plan',
-          };
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(8),
+    final horizontalPadding = MediaQuery.sizeOf(context).width < 380
+        ? AppSpacing.md
+        : AppSpacing.lg;
+    final showRestore =
+        !widget.globalFreeAccess &&
+        widget.purchasesEnabled &&
+        widget.isOwner &&
+        widget.onRestore != null;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Plans & Billing'),
+        actions: <Widget>[
+          if (showRestore)
+            TextButton(
+              onPressed: widget.busyProductId == null ? widget.onRestore : null,
+              child: const Text('Restore'),
+            ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Icon(
-                access.wasDowngraded
-                    ? Icons.info_outline
-                    : Icons.verified_outlined,
-                color: color,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  tierName,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+      body: RefreshIndicator(
+        onRefresh: widget.onRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            AppSpacing.sm,
+            horizontalPadding,
+            40,
+          ),
+          children: widget.globalFreeAccess
+              ? <Widget>[
+                  _FreeAccessHero(message: widget.policyMessage),
+                  const SizedBox(height: AppSpacing.lg),
+                  const _FreeAccessFeatureGrid(),
+                  const SizedBox(height: AppSpacing.lg),
+                  const _PurchasesPausedCard(),
+                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: widget.onRefresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh access'),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'Access is managed securely by SabiBom.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.mutedTextColor,
+                    ),
+                  ),
+                ]
+              : <Widget>[
+                  const _PlansHero(),
+                  const SizedBox(height: AppSpacing.lg),
+                  _buildPlans(context),
+                  const SizedBox(height: AppSpacing.lg),
+                  _buildAccess(context),
+                ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlans(BuildContext context) {
+    return widget.plans.when(
+      loading: () => const _BillingLoading(label: 'Loading available plans'),
+      error: (error, _) => AppErrorState(
+        title: 'Plans are unavailable',
+        message: '$error',
+        onRetry: widget.onRetryPlans,
+      ),
+      data: (plans) {
+        if (plans.isEmpty) {
+          return const AppEmptyState(
+            title: 'No active plans',
+            description: 'Active plans will appear here.',
+            icon: Icons.workspace_premium_outlined,
+          );
+        }
+
+        final intervals = <String>[];
+        for (final plan in plans) {
+          final interval = _normalizedInterval(plan.billingInterval);
+          if (!intervals.contains(interval)) intervals.add(interval);
+        }
+        final selected = intervals.contains(_selectedInterval)
+            ? _selectedInterval!
+            : intervals.first;
+        final visiblePlans = plans
+            .where(
+              (plan) => _normalizedInterval(plan.billingInterval) == selected,
+            )
+            .toList(growable: false);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Choose your plan',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            if (intervals.length > 1) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              _IntervalSelector(
+                intervals: intervals,
+                selected: selected,
+                onSelected: (value) {
+                  setState(() => _selectedInterval = value);
+                },
               ),
             ],
-          ),
-          if (subscription != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Text('Status: ${subscription.status.replaceAll('_', ' ')}'),
-            if (end != null)
-              Text('Access until ${DateFormat.yMMMd().add_jm().format(end)}'),
-          ],
-          if (access.wasDowngraded) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            const Text(
-              'Your business data remains available. Premium tools are limited '
-              'until the subscription is renewed.',
-            ),
-          ],
-          if (onManage != null) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
-            OutlinedButton.icon(
-              onPressed: onManage,
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Manage in Google Play'),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final useTwoColumns =
+                    constraints.maxWidth >= 720 &&
+                    MediaQuery.textScalerOf(context).scale(1) <= 1.3;
+                final cardWidth = useTwoColumns
+                    ? (constraints.maxWidth - AppSpacing.md) / 2
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.md,
+                  children: visiblePlans
+                      .map(
+                        (plan) => SizedBox(
+                          width: cardWidth,
+                          child: BillingPlanCard(
+                            plan: plan,
+                            storePrice:
+                                widget.storePrices[plan.googlePlayProductId],
+                            canPurchase:
+                                widget.isOwner && widget.purchasesEnabled,
+                            purchasesEnabled: widget.purchasesEnabled,
+                            busy:
+                                widget.busyProductId ==
+                                plan.googlePlayProductId,
+                            onPurchase: () => widget.onPurchase(plan),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                );
+              },
             ),
+            if (!widget.isOwner) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              _OwnerNotice(purchasesEnabled: widget.purchasesEnabled),
+            ] else if (!widget.purchasesEnabled) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              const _OwnerNotice(purchasesEnabled: false),
+            ],
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAccess(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Current access',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        widget.access.when(
+          loading: () =>
+              const _BillingLoading(label: 'Checking current access'),
+          error: (error, _) => AppErrorState(
+            title: 'Could not load billing',
+            message: '$error',
+            onRetry: widget.onRetryAccess,
+          ),
+          data: (value) => BillingAccessSummary(
+            access: value,
+            onManage:
+                widget.isOwner &&
+                    widget.purchasesEnabled &&
+                    (value.plan?.googlePlayProductId.isNotEmpty ?? false)
+                ? () => widget.onManage(value.plan!.googlePlayProductId)
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlansHero extends StatelessWidget {
+  const _PlansHero();
+
+  @override
+  Widget build(BuildContext context) {
+    return _HeroSurface(
+      eyebrow: 'SABIBOM PRO',
+      title: 'Grow without limits',
+      message:
+          'Choose a plan built around your business. Upgrade securely through '
+          'Google Play whenever you are ready.',
+      trailing: const _BrandMark(),
+    );
+  }
+}
+
+class _FreeAccessHero extends StatelessWidget {
+  const _FreeAccessHero({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return _HeroSurface(
+      eyebrow: 'FULL ACCESS ACTIVE',
+      title: 'All Pro tools are yours',
+      message: message,
+      trailing: const _BrandMark(celebratory: true),
+      footer: const Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: <Widget>[
+          _StatusChip(icon: Icons.campaign_outlined, label: 'Free with ads'),
+          _StatusChip(
+            icon: Icons.credit_card_off_outlined,
+            label: 'No payment needed',
+          ),
         ],
       ),
     );
   }
 }
 
-class _PlanCard extends StatelessWidget {
-  const _PlanCard({
+class _HeroSurface extends StatelessWidget {
+  const _HeroSurface({
+    required this.eyebrow,
+    required this.title,
+    required this.message,
+    required this.trailing,
+    this.footer,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String message;
+  final Widget trailing;
+  final Widget? footer;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      container: true,
+      header: true,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: context.isDarkTheme
+                ? <Color>[AppColors.surfaceDark, const Color(0xFF241D43)]
+                : <Color>[Colors.white, const Color(0xFFF1EDFF)],
+          ),
+          border: Border.all(color: context.brandTintBorder),
+          borderRadius: BorderRadius.circular(AppRadii.feature),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: context.elevationShadowColor,
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.md,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                SizedBox(width: 72, height: 72, child: trailing),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 620),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        eyebrow,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.6,
+                            ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        message,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: context.mutedTextColor,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (footer != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              footer!,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandMark extends StatelessWidget {
+  const _BrandMark({this.celebratory = false});
+
+  final bool celebratory;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      image: true,
+      label: celebratory ? 'SabiBom full access' : 'SabiBom Pro',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: context.brandTintStrong,
+          borderRadius: BorderRadius.circular(AppRadii.card),
+        ),
+        child: Image.asset(
+          'assets/images/SB icon.png',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: context.surfaceColor.withValues(alpha: 0.8),
+        border: Border.all(color: context.brandTintBorder),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FreeAccessFeatureGrid extends StatelessWidget {
+  const _FreeAccessFeatureGrid();
+
+  static const _features = <(IconData, String, String)>[
+    (
+      Icons.storefront_outlined,
+      'Unlimited branches',
+      'Run every location from one workspace.',
+    ),
+    (
+      Icons.groups_outlined,
+      'Unlimited team',
+      'Bring your whole team into SabiBom.',
+    ),
+    (
+      Icons.insights_outlined,
+      'Advanced reports',
+      'See deeper trends across your business.',
+    ),
+    (
+      Icons.cloud_download_outlined,
+      'Backup & exports',
+      'Keep and export your business records.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final oneColumn =
+            constraints.maxWidth < 520 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.3;
+        final width = oneColumn
+            ? constraints.maxWidth
+            : (constraints.maxWidth - AppSpacing.md) / 2;
+        return Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
+          children: _features
+              .map(
+                (feature) => SizedBox(
+                  width: width,
+                  child: _FeatureCard(
+                    icon: feature.$1,
+                    title: feature.$2,
+                    description: feature.$3,
+                  ),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+}
+
+class _FeatureCard extends StatelessWidget {
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        border: Border.all(color: context.borderColor),
+        borderRadius: BorderRadius.circular(AppRadii.card),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: context.brandTint,
+              borderRadius: BorderRadius.circular(AppRadii.card),
+            ),
+            child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: context.mutedTextColor,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PurchasesPausedCard extends StatelessWidget {
+  const _PurchasesPausedCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label:
+          'Pro purchases are paused. You will not be charged while free access '
+          'is active. Ads remain enabled.',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: context.brandTint,
+          border: Border.all(color: context.brandTintBorder),
+          borderRadius: BorderRadius.circular(AppRadii.card),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              Icons.info_outline,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Pro purchases are paused',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  const Text(
+                    'You will not be charged while free access is active. '
+                    'Ads remain enabled.',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IntervalSelector extends StatelessWidget {
+  const _IntervalSelector({
+    required this.intervals,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<String> intervals;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: 'Billing interval',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: context.brandTint,
+          border: Border.all(color: context.brandTintBorder),
+          borderRadius: BorderRadius.circular(AppRadii.input),
+        ),
+        child: Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          children: intervals
+              .map(
+                (interval) => ChoiceChip(
+                  label: Text(_displayInterval(interval)),
+                  selected: interval == selected,
+                  showCheckmark: false,
+                  onSelected: (_) => onSelected(interval),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ),
+    );
+  }
+}
+
+@visibleForTesting
+class BillingPlanCard extends StatelessWidget {
+  const BillingPlanCard({
     required this.plan,
     required this.storePrice,
     required this.canPurchase,
+    required this.purchasesEnabled,
     required this.busy,
     required this.onPurchase,
+    super.key,
   });
+
   final SubscriptionPlan plan;
   final String? storePrice;
   final bool canPurchase;
+  final bool purchasesEnabled;
   final bool busy;
   final VoidCallback onPurchase;
 
@@ -416,58 +923,276 @@ class _PlanCard extends StatelessWidget {
     final price =
         storePrice ??
         formatCurrency(plan.price, code: plan.currency, symbol: plan.currency);
+    final productAvailable = plan.googlePlayProductId.trim().isNotEmpty;
+    return Semantics(
+      container: true,
+      label:
+          '${plan.name}, $price per ${_displayInterval(plan.billingInterval)}',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          border: Border.all(color: context.brandTintBorder, width: 1.5),
+          borderRadius: BorderRadius.circular(AppRadii.feature),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: context.elevationShadowColor,
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              plan.name,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.end,
+              children: <Widget>[
+                Text(
+                  price,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: Text(
+                    '/ ${_displayInterval(plan.billingInterval)}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: context.mutedTextColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (plan.description.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                plan.description,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: context.mutedTextColor,
+                  height: 1.4,
+                ),
+              ),
+            ],
+            if (plan.features.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              ...plan.features.map(
+                (feature) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Container(
+                        margin: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: context.brandTint,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.check,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: Text(feature)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (canPurchase && productAvailable) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: <Color>[AppColors.primary, Color(0xFF8B5CF6)],
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadii.input),
+                ),
+                child: FilledButton.icon(
+                  key: ValueKey<String>('purchase-${plan.id}'),
+                  onPressed: busy ? null : onPurchase,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    disabledBackgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                  icon: busy
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.workspace_premium_outlined),
+                  label: Text(busy ? 'Opening Google Play...' : 'Choose plan'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(
+                    Icons.lock_outline,
+                    size: 15,
+                    color: context.mutedTextColor,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Flexible(
+                    child: Text(
+                      'Secure checkout through Google Play',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: context.mutedTextColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OwnerNotice extends StatelessWidget {
+  const _OwnerNotice({required this.purchasesEnabled});
+
+  final bool purchasesEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = purchasesEnabled
+        ? 'Only the business owner can purchase or manage plans.'
+        : 'Plan purchases are currently unavailable.';
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: context.brandTint,
+        borderRadius: BorderRadius.circular(AppRadii.card),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            Icons.info_outline,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(message)),
+        ],
+      ),
+    );
+  }
+}
+
+@visibleForTesting
+class BillingAccessSummary extends StatelessWidget {
+  const BillingAccessSummary({required this.access, this.onManage, super.key});
+
+  final ResolvedBusinessEntitlements access;
+  final VoidCallback? onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final subscription = access.subscription;
+    final statusColor = access.wasDowngraded
+        ? AppColors.warning
+        : AppColors.secondary;
+    final end = subscription?.accessEnd;
+    final tierName = switch (access.tier) {
+      BillingTier.free => 'Free plan',
+      BillingTier.pro => 'Pro plan',
+      BillingTier.complimentary => 'Complimentary plan',
+    };
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(8),
+        color: context.surfaceColor,
+        border: Border.all(color: context.borderColor),
+        borderRadius: BorderRadius.circular(AppRadii.card),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Expanded(
-                child: Text(
-                  plan.name,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  access.wasDowngraded
+                      ? Icons.info_outline
+                      : Icons.verified_outlined,
+                  color: statusColor,
                 ),
               ),
-              Text('$price / ${plan.billingInterval.replaceAll('_', ' ')}'),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      tierName,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (subscription != null) ...<Widget>[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Status: ${subscription.status.replaceAll('_', ' ')}',
+                        style: TextStyle(color: context.mutedTextColor),
+                      ),
+                      if (end != null)
+                        Text(
+                          'Access until ${DateFormat.yMMMd().add_jm().format(end)}',
+                          style: TextStyle(color: context.mutedTextColor),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
-          if (plan.description.isNotEmpty) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Text(plan.description),
-          ],
-          if (plan.features.isNotEmpty) ...<Widget>[
+          if (access.wasDowngraded) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
-            ...plan.features.map(
-              (feature) => Row(
-                children: <Widget>[
-                  const Icon(Icons.check, size: 18),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text(feature)),
-                ],
-              ),
+            const Text(
+              'Your business data remains available. Premium tools are limited '
+              'until the subscription is renewed.',
             ),
           ],
-          if (canPurchase && plan.googlePlayProductId.isNotEmpty) ...<Widget>[
+          if (onManage != null) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: busy ? null : onPurchase,
-                icon: busy
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.workspace_premium_outlined),
-                label: Text(busy ? 'Opening Google Play...' : 'Choose plan'),
+              child: OutlinedButton.icon(
+                onPressed: onManage,
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Manage in Google Play'),
               ),
             ),
           ],
@@ -475,4 +1200,34 @@ class _PlanCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BillingLoading extends StatelessWidget {
+  const _BillingLoading({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: const Padding(
+        padding: EdgeInsets.all(AppSpacing.xl),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    );
+  }
+}
+
+String _normalizedInterval(String value) {
+  final normalized = value.trim().toLowerCase();
+  return normalized.isEmpty ? 'billing period' : normalized;
+}
+
+String _displayInterval(String value) {
+  final words = _normalizedInterval(
+    value,
+  ).replaceAll('_', ' ').replaceAll('-', ' ');
+  return words[0].toUpperCase() + words.substring(1);
 }
