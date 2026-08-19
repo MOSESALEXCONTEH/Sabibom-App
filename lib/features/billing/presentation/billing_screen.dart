@@ -74,8 +74,10 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
+          ref.invalidate(runtimeConfigurationProvider);
           ref.invalidate(currentBusinessSubscriptionProvider);
           ref.invalidate(activeSubscriptionPlansProvider);
+          await ref.read(runtimeConfigurationProvider.future);
         },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(

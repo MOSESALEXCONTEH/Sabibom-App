@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../maintenance/data/runtime_configuration_repository.dart';
 import '../application/billing_providers.dart';
 import '../domain/billing_entitlements.dart';
 
@@ -26,7 +27,22 @@ Future<bool> requireEntitlement(
   required String key,
   required String featureName,
 }) async {
-  if (ref.read(entitlementEnabledProvider(key))) return true;
+  final access = ref.read(currentBusinessEntitlementsProvider);
+  if (access.isLoading) {
+    _showAccessStatus(
+      context,
+      'Checking feature access. Try again in a moment.',
+    );
+    return false;
+  }
+  if (access.hasError) {
+    _showAccessStatus(
+      context,
+      'Could not verify feature access. Check your connection and try again.',
+    );
+    return false;
+  }
+  if (access.requireValue.entitlements.isEnabled(key)) return true;
   return _showUpgradeDialog(context, featureName);
 }
 
@@ -37,11 +53,31 @@ Future<bool> requireEntitlementCapacity(
   required int currentUsage,
   required String featureName,
 }) async {
-  final limit = ref.read(entitlementLimitProvider(key));
+  final access = ref.read(currentBusinessEntitlementsProvider);
+  if (access.isLoading) {
+    _showAccessStatus(
+      context,
+      'Checking feature access. Try again in a moment.',
+    );
+    return false;
+  }
+  if (access.hasError) {
+    _showAccessStatus(
+      context,
+      'Could not verify feature access. Check your connection and try again.',
+    );
+    return false;
+  }
+  final limit = access.requireValue.entitlements.limit(key);
   if (limit == BusinessEntitlements.unlimited || currentUsage < limit) {
     return true;
   }
   return _showUpgradeDialog(context, featureName);
+}
+
+void _showAccessStatus(BuildContext context, String message) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 Future<bool> _showUpgradeDialog(
@@ -89,7 +125,56 @@ class EntitlementGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final enabled = ref.watch(entitlementEnabledProvider(entitlementKey));
+    final access = ref.watch(currentBusinessEntitlementsProvider);
+    if (access.isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: Text(featureName)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (access.hasError) {
+      return Scaffold(
+        appBar: AppBar(title: Text(featureName)),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Icon(Icons.cloud_off_outlined, size: 52),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Could not verify feature access',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Check your connection and try again. No subscription '
+                    'change is needed.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () {
+                      ref
+                        ..invalidate(runtimeConfigurationProvider)
+                        ..invalidate(currentBusinessSubscriptionProvider)
+                        ..invalidate(activeSubscriptionPlansProvider);
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Try again'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    final enabled = access.requireValue.entitlements.isEnabled(entitlementKey);
     if (enabled) return child;
     return Scaffold(
       appBar: AppBar(title: Text(featureName)),

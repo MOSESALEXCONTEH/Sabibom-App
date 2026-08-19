@@ -111,6 +111,108 @@ void main() {
     );
   });
 
+  for (final subscriptionState in <AsyncValue<BusinessSubscription?>>[
+    const AsyncLoading(),
+    AsyncError(StateError('subscription unavailable'), StackTrace.empty),
+  ]) {
+    test('global policy unlocks immediately while subscription is '
+        '${subscriptionState.isLoading ? 'loading' : 'unavailable'}', () {
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigurationProvider.overrideWithValue(
+            const AsyncData(
+              RuntimeConfiguration(
+                maintenance: _maintenanceOff,
+                billing: RuntimeBillingAccessPolicy(
+                  schemaVersion: 1,
+                  globalFreeAccessEnabled: true,
+                  purchasesEnabled: false,
+                ),
+              ),
+            ),
+          ),
+          currentBusinessSubscriptionProvider.overrideWithValue(
+            subscriptionState,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final resolved = container.read(currentBusinessEntitlementsProvider);
+      expect(resolved.hasValue, isTrue);
+      expect(
+        resolved.requireValue.source,
+        EntitlementResolutionSource.globalFreeAccess,
+      );
+      expect(
+        resolved.requireValue.entitlements.isEnabled(
+          BillingEntitlementKeys.reportsAdvanced,
+        ),
+        isTrue,
+      );
+    });
+  }
+
+  testWidgets('entitlement gate shows loading instead of a Pro paywall', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentBusinessEntitlementsProvider.overrideWithValue(
+            const AsyncLoading(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: EntitlementGate(
+            entitlementKey: BillingEntitlementKeys.reportsAdvanced,
+            featureName: 'Business Health AI Score',
+            child: Text('Business health content'),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.textContaining('is a Pro feature'), findsNothing);
+  });
+
+  testWidgets('global policy opens a gated feature immediately', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          runtimeConfigurationProvider.overrideWithValue(
+            const AsyncData(
+              RuntimeConfiguration(
+                maintenance: _maintenanceOff,
+                billing: RuntimeBillingAccessPolicy(
+                  schemaVersion: 1,
+                  globalFreeAccessEnabled: true,
+                  purchasesEnabled: false,
+                ),
+              ),
+            ),
+          ),
+          currentBusinessSubscriptionProvider.overrideWithValue(
+            const AsyncLoading(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: EntitlementGate(
+            entitlementKey: BillingEntitlementKeys.reportsAdvanced,
+            featureName: 'Business Health AI Score',
+            child: Text('Business health content'),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Business health content'), findsOneWidget);
+    expect(find.textContaining('is a Pro feature'), findsNothing);
+  });
+
   testWidgets('Free report history hides records older than 30 days', (
     tester,
   ) async {

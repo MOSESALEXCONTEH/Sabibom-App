@@ -56,6 +56,14 @@ final currentBusinessEntitlementsProvider =
           ? value.whenData((resolved) => resolved.withGlobalFreeAccess())
           : value;
       final subscription = ref.watch(currentBusinessSubscriptionProvider);
+      if (globalFreeAccess && !subscription.hasValue) {
+        return AsyncData(
+          ResolvedBusinessEntitlements.resolve(
+            subscription: null,
+            plans: const <SubscriptionPlan>[],
+          ).withGlobalFreeAccess(),
+        );
+      }
       return applyPolicy(
         subscription.when(
           loading: () => const AsyncLoading(),
