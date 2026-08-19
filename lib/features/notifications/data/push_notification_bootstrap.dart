@@ -146,6 +146,46 @@ class PushNotificationBootstrap {
     }
   }
 
+  /// Shows a best-effort device notification after a transaction is saved.
+  /// Notification failures must never make a successful transaction look
+  /// unsuccessful to the user.
+  Future<void> showTransactionConfirmation({
+    required int id,
+    required String title,
+    required String body,
+    required String routeName,
+    required String routeParameterName,
+    required String routeParameterValue,
+  }) async {
+    try {
+      if (kIsWeb) return;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || !await _pushEnabledForUser(user.uid)) return;
+      await _ensureInitialized();
+      await _local.show(
+        id: id & 0x7fffffff,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            SabibomNotificationChannels.general.id,
+            SabibomNotificationChannels.general.name,
+            channelDescription: SabibomNotificationChannels.general.description,
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: const DarwinNotificationDetails(),
+        ),
+        payload: jsonEncode(<String, String>{
+          'routeName': routeName,
+          routeParameterName: routeParameterValue,
+        }),
+      );
+    } catch (_) {
+      // The transaction is already saved; notification display is optional.
+    }
+  }
+
   Future<void> _registerTokenIfChanged(String uid, String token) async {
     final prefs = await SharedPreferences.getInstance();
     final key = '$_registeredTokenPrefix$uid';
@@ -335,6 +375,7 @@ class PushNotificationBootstrap {
           'supplierId',
           'expenseId',
           'saleId',
+          'purchaseId',
           'approvalId',
           'dateKey',
           'weekKey',

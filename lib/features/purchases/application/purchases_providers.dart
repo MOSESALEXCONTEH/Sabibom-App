@@ -4,12 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/sync/offline_mutation_queue.dart';
 import '../../branches/application/current_branch_providers.dart';
+import '../../notifications/application/transaction_notification_service.dart';
+import '../data/notifying_purchases_repository.dart';
 import '../data/purchases_repository.dart';
 import '../domain/purchase.dart';
 
 final purchasesRepositoryProvider = Provider<PurchasesRepository>(
-  (ref) => FirestorePurchasesRepository(
-    offlineQueue: ref.watch(offlineMutationQueueProvider),
+  (ref) => NotifyingPurchasesRepository(
+    FirestorePurchasesRepository(
+      offlineQueue: ref.watch(offlineMutationQueueProvider),
+    ),
+    ref.watch(transactionNotificationServiceProvider),
   ),
 );
 

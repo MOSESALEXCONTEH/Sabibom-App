@@ -14,6 +14,7 @@ import '../../sales/domain/sale_models.dart';
 import '../application/sabi_providers.dart';
 import '../data/firebase_sabi_repository.dart';
 import '../domain/sabi_command.dart';
+import 'widgets/sabi_thinking_indicator.dart';
 
 class SabiSaleDraftScreen extends ConsumerStatefulWidget {
   const SabiSaleDraftScreen({
@@ -175,20 +176,7 @@ class _SabiSaleDraftScreenState extends ConsumerState<SabiSaleDraftScreen> {
                 child: FilledButton(
                   onPressed: _loading ? null : _parse,
                   child: _loading
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const <Widget>[
-                            SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Text('Sabi is thinking…'),
-                          ],
-                        )
+                      ? const SabiThinkingIndicator()
                       : const Text('Parse with Sabi'),
                 ),
               ),

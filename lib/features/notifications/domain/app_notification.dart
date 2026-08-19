@@ -482,6 +482,7 @@ abstract final class NotificationRouteAllowlist {
     'supplierDetails',
     'expenseDetails',
     'saleDetails',
+    'purchaseDetails',
     'approvalDetails',
     'approvals',
     'invite',

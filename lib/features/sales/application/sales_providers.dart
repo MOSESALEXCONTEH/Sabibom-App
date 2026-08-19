@@ -5,16 +5,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../branches/application/current_branch_providers.dart';
 import '../../../core/sync/offline_mutation_queue.dart';
+import '../../notifications/application/transaction_notification_service.dart';
 import '../../products/application/products_providers.dart';
 import '../../products/domain/product.dart';
 import '../data/firestore_sales_repository.dart';
+import '../data/notifying_sales_repository.dart';
 import '../data/sales_repository.dart';
 import '../domain/sale.dart';
 import '../domain/sale_models.dart';
 
 final salesRepositoryProvider = Provider<SalesRepository>(
-  (ref) => FirestoreSalesRepository(
-    offlineQueue: ref.watch(offlineMutationQueueProvider),
+  (ref) => NotifyingSalesRepository(
+    FirestoreSalesRepository(
+      offlineQueue: ref.watch(offlineMutationQueueProvider),
+    ),
+    ref.watch(transactionNotificationServiceProvider),
   ),
 );
 
