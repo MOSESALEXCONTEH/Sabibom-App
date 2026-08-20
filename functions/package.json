@@ -4,7 +4,7 @@
   "scripts": {
     "build": "tsc",
     "lint": "eslint --ext .ts src || true",
-    "test": "npm run build && node --test lib/sabi/schemas.test.js",
+    "test": "npm run build && node --test \"lib/**/*.test.js\"",
     "test:firestore-rules": "firebase emulators:exec --only firestore \"node --test test/firestore.rules.phase2.test.js\"",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions"

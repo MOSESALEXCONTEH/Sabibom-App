@@ -1,57 +1,40 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/network/authenticated_api_client.dart';
 
-import '../../../core/formatting/currency_formatter.dart';
-import '../../team/domain/app_permission.dart';
-import '../../team/domain/business_membership.dart';
-import '../data/notifications_repository.dart';
-
-/// Customer debt, supplier debt, and large-expense alerts with dedupe keys.
+/// Requests authoritative customer-debt, supplier-credit, and large-expense
+/// notification delivery after the source transaction has been persisted.
+///
+/// The backend re-reads the source document, thresholds, memberships,
+/// permissions, preferences, quiet hours, and device tokens before creating
+/// in-app records or sending push. Failures are intentionally best-effort and
+/// can never fail the transaction that triggered the request.
 class OperationalAlertService {
-  OperationalAlertService({
-    NotificationsRepository? notifications,
-    FirebaseFirestore? firestore,
-  }) : _notifications = notifications ?? NotificationsRepository(),
-       _db = firestore ?? FirebaseFirestore.instance;
+  OperationalAlertService({AuthenticatedApiClient? apiClient})
+    : _apiClient = apiClient ?? AuthenticatedApiClient();
 
-  final NotificationsRepository _notifications;
-  final FirebaseFirestore _db;
+  final AuthenticatedApiClient _apiClient;
 
   Future<void> onCustomerCreditCreated({
     required String businessId,
     required String businessName,
     required String branchId,
+    required String saleId,
     required String customerId,
     required String customerName,
     required int balanceMinor,
     String currencySymbol = 'Le',
   }) async {
-    if (businessId.isEmpty || customerId.isEmpty || balanceMinor <= 0) return;
-    final amount = formatCurrency(balanceMinor / 100, symbol: currencySymbol);
-    await _notify(
+    if (businessId.isEmpty ||
+        branchId.isEmpty ||
+        saleId.isEmpty ||
+        customerId.isEmpty ||
+        balanceMinor <= 0) {
+      return;
+    }
+    await _dispatch(
       businessId: businessId,
-      businessName: businessName,
       branchId: branchId,
-      permission: AppPermission.viewCustomerDebtAlerts,
-      type: AppNotificationType.customerCreditCreated,
-      title: 'Customer credit',
-      body: '$customerName owes $amount.',
-      entityType: 'customer',
-      entityId: customerId,
-      routeName: 'customerDetails',
-      routeParameters: {'customerId': customerId},
-      deduplicationKey:
-          'customer_credit_${businessId}_${customerId}_${_dayKey()}',
-      prefsGate: (p) => p.customerDebtEnabled,
-      thresholdGate: (p) => balanceMinor >= p.customerDebtMinimumMinor,
-    );
-  }
-
-  Future<void> onCustomerDebtResolved({
-    required String businessId,
-    required String customerId,
-  }) async {
-    await _notifications.resolveEvent(
-      'customer_debt_${businessId}_$customerId',
+      category: 'customer_debt',
+      sourceId: saleId,
     );
   }
 
@@ -59,29 +42,24 @@ class OperationalAlertService {
     required String businessId,
     required String businessName,
     required String branchId,
+    required String purchaseId,
     required String supplierId,
     required String supplierName,
     required int balanceMinor,
     String currencySymbol = 'Le',
   }) async {
-    if (businessId.isEmpty || supplierId.isEmpty || balanceMinor <= 0) return;
-    final amount = formatCurrency(balanceMinor / 100, symbol: currencySymbol);
-    await _notify(
+    if (businessId.isEmpty ||
+        branchId.isEmpty ||
+        purchaseId.isEmpty ||
+        supplierId.isEmpty ||
+        balanceMinor <= 0) {
+      return;
+    }
+    await _dispatch(
       businessId: businessId,
-      businessName: businessName,
       branchId: branchId,
-      permission: AppPermission.viewSupplierPaymentAlerts,
-      type: AppNotificationType.supplierCreditCreated,
-      title: 'Supplier balance',
-      body: '$supplierName is owed $amount.',
-      entityType: 'supplier',
-      entityId: supplierId,
-      routeName: 'supplierDetails',
-      routeParameters: {'supplierId': supplierId},
-      deduplicationKey:
-          'supplier_credit_${businessId}_${supplierId}_${_dayKey()}',
-      prefsGate: (p) => p.supplierPaymentEnabled,
-      thresholdGate: (p) => balanceMinor >= p.supplierDebtMinimumMinor,
+      category: 'supplier_credit',
+      sourceId: purchaseId,
     );
   }
 
@@ -95,91 +73,39 @@ class OperationalAlertService {
     required String recordedBy,
     String currencySymbol = 'Le',
   }) async {
-    if (businessId.isEmpty || expenseId.isEmpty || amountMinor <= 0) return;
-    final amount = formatCurrency(amountMinor / 100, symbol: currencySymbol);
-    await _notify(
+    if (businessId.isEmpty ||
+        branchId.isEmpty ||
+        expenseId.isEmpty ||
+        amountMinor <= 0) {
+      return;
+    }
+    await _dispatch(
       businessId: businessId,
-      businessName: businessName,
       branchId: branchId,
-      permission: AppPermission.viewExpenses,
-      type: AppNotificationType.largeExpense,
-      title: 'Large expense',
-      body: 'A large expense of $amount was recorded for $categoryName.',
-      entityType: 'expense',
-      entityId: expenseId,
-      routeName: 'expenseDetails',
-      routeParameters: {'expenseId': expenseId},
-      deduplicationKey: 'large_expense_${businessId}_$expenseId',
-      prefsGate: (p) => p.largeExpenseEnabled,
-      thresholdGate: (p) => amountMinor >= p.largeExpenseThresholdMinor,
-      data: {'recordedBy': recordedBy},
+      category: 'large_expense',
+      sourceId: expenseId,
     );
   }
 
-  Future<void> _notify({
+  Future<void> _dispatch({
     required String businessId,
-    required String businessName,
     required String branchId,
-    required AppPermission permission,
-    required AppNotificationType type,
-    required String title,
-    required String body,
-    required String entityType,
-    required String entityId,
-    required String routeName,
-    required Map<String, String> routeParameters,
-    required String deduplicationKey,
-    required bool Function(NotificationPreferences) prefsGate,
-    required bool Function(NotificationPreferences) thresholdGate,
-    Map<String, Object?>? data,
+    required String category,
+    required String sourceId,
   }) async {
-    final members = await _activeMembers(businessId);
-    for (final member in members) {
-      if (!member.hasPermission(permission)) continue;
-      final prefs = await _notifications.getPreferences(
-        userId: member.uid,
-        businessId: businessId,
+    try {
+      await _apiClient.postJson(
+        '/api/notifications/dispatch-operational-alert',
+        body: <String, dynamic>{
+          'businessId': businessId,
+          'branchId': branchId,
+          'category': category,
+          'sourceId': sourceId,
+        },
+        timeout: const Duration(seconds: 8),
       );
-      if (!prefs.inAppEnabled || !prefsGate(prefs) || !thresholdGate(prefs)) {
-        continue;
-      }
-      await _notifications.createNotification(
-        userId: member.uid,
-        type: type,
-        title: title,
-        body: body,
-        businessId: businessId,
-        businessName: businessName,
-        branchId: branchId,
-        entityType: entityType,
-        entityId: entityId,
-        routeName: routeName,
-        routeParameters: routeParameters,
-        deduplicationKey: '${deduplicationKey}_${member.uid}',
-        sourceType: entityType,
-        sourceId: entityId,
-        generatedBy: 'operational_alert_service',
-        data: data,
-      );
+    } catch (_) {
+      // Notification delivery is best-effort and must not fail saved records.
     }
-  }
-
-  Future<List<BusinessMembership>> _activeMembers(String businessId) async {
-    final snap = await _db
-        .collection('businesses')
-        .doc(businessId)
-        .collection('members')
-        .where('status', isEqualTo: 'active')
-        .get();
-    return snap.docs
-        .map((d) => BusinessMembership.fromMap(d.id, businessId, d.data()))
-        .toList(growable: false);
-  }
-
-  String _dayKey() {
-    final now = DateTime.now();
-    final m = now.month.toString().padLeft(2, '0');
-    final d = now.day.toString().padLeft(2, '0');
-    return '${now.year}-$m-$d';
   }
 }

@@ -422,6 +422,7 @@ class PushNotificationBootstrap {
           'saleId',
           'purchaseId',
           'approvalId',
+          'invitationId',
           'dateKey',
           'weekKey',
         })

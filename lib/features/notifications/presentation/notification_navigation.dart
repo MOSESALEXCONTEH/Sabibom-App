@@ -45,6 +45,7 @@ Future<void> openNotificationRoute(
               e.key == 'expenseId' ||
               e.key == 'saleId' ||
               e.key == 'approvalId' ||
+              e.key == 'invitationId' ||
               e.key == 'dateKey' ||
               e.key == 'weekKey')
             e.key: e.value,
@@ -57,6 +58,7 @@ Future<void> openNotificationRoute(
               e.key != 'expenseId' &&
               e.key != 'saleId' &&
               e.key != 'approvalId' &&
+              e.key != 'invitationId' &&
               e.key != 'dateKey' &&
               e.key != 'weekKey')
             e.key: e.value,
@@ -89,7 +91,16 @@ Future<void> openNotificationRoute(
   }
 
   if (n.type == AppNotificationType.invitationReceived) {
-    context.pushNamed(AppRouteNames.invite);
+    final invitationId =
+        n.routeParameters['invitationId'] ?? n.entityId?.trim();
+    if (invitationId != null && invitationId.isNotEmpty) {
+      context.pushNamed(
+        AppRouteNames.inviteWithId,
+        pathParameters: {'invitationId': invitationId},
+      );
+    } else {
+      context.pushNamed(AppRouteNames.invite);
+    }
     return;
   }
   if (n.type == AppNotificationType.approvalRequested ||
@@ -109,8 +120,13 @@ Future<void> openNotificationRoute(
   if (n.type == AppNotificationType.roleChanged ||
       n.type == AppNotificationType.permissionChanged ||
       n.type == AppNotificationType.membershipDisabled ||
-      n.type == AppNotificationType.membershipRestored) {
+      n.type == AppNotificationType.membershipRestored ||
+      n.type == AppNotificationType.membershipRemoved) {
     context.pushNamed(AppRouteNames.myRole);
+    return;
+  }
+  if (n.type == AppNotificationType.staffActivity) {
+    context.pushNamed(AppRouteNames.teamActivity);
     return;
   }
   if (n.type == AppNotificationType.lowStock ||

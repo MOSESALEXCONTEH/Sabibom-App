@@ -251,6 +251,16 @@ enum AppNotificationType {
     NotificationCategory.staff,
     NotificationPriority.normal,
   ),
+  membershipRemoved(
+    'membership_removed',
+    NotificationCategory.staff,
+    NotificationPriority.urgent,
+  ),
+  staffActivity(
+    'staff_activity',
+    NotificationCategory.staff,
+    NotificationPriority.normal,
+  ),
   staffDisabled(
     'staff_disabled',
     NotificationCategory.staff,
@@ -501,8 +511,10 @@ abstract final class NotificationRouteAllowlist {
     'approvalDetails',
     'approvals',
     'invite',
+    'inviteWithId',
     'myRole',
     'team',
+    'teamActivity',
     'reports',
     'reportProfitLoss',
     'reportProductProfit',

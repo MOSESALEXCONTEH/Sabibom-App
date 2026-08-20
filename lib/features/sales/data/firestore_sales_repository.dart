@@ -695,6 +695,7 @@ class FirestoreSalesRepository implements SalesRepository {
         businessId: businessId,
         businessName: businessName,
         branchId: request.branchId,
+        saleId: request.saleId,
         customerId: customerId,
         customerName:
             (customerSnap.data()?['name'] as String?) ??

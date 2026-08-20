@@ -6,6 +6,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/network/authenticated_api_client.dart';
 import '../../../core/sync/offline_mutation_queue.dart';
 import '../../branches/domain/business_branch.dart';
+import '../../notifications/application/operational_alert_service.dart';
 import '../../sales/domain/sale_models.dart';
 import '../domain/purchase.dart';
 import '../domain/purchase_calculator.dart';
@@ -188,6 +189,7 @@ class FirestorePurchasesRepository implements PurchasesRepository {
                 'The purchase was saved but could not be refreshed. Try again.',
           );
         }
+        await _notifySupplierCredit(completed);
         return completed;
       } on ApiException catch (error) {
         // Inventory purchase route may not be deployed yet on Vercel (404).
@@ -225,7 +227,7 @@ class FirestorePurchasesRepository implements PurchasesRepository {
     final activity = business.collection('activity').doc();
 
     try {
-      return await _firestore.runTransaction((transaction) async {
+      final completed = await _firestore.runTransaction((transaction) async {
         final businessSnapshot = await transaction.get(business);
         final branchSnapshot = await transaction.get(branch);
         final existing = await transaction.get(purchase);
@@ -513,10 +515,53 @@ class FirestorePurchasesRepository implements PurchasesRepository {
           paymentMethod: request.paymentMethod,
         );
       });
+      await _notifySupplierCredit(completed);
+      return completed;
     } on PurchaseException {
       rethrow;
     } on FirebaseException catch (error) {
       throw PurchaseException(error.code, message: error.message);
+    }
+  }
+
+  Future<void> _notifySupplierCredit(Purchase purchase) async {
+    if (purchase.balanceDueMinor <= 0 || purchase.supplierId.isEmpty) return;
+    final branchId = purchase.branchId?.trim();
+    if (branchId == null || branchId.isEmpty) return;
+    try {
+      final business = _firestore
+          .collection('businesses')
+          .doc(purchase.businessId);
+      final businessSnapshot = await business.get();
+      final supplierSnapshot = await business
+          .collection('suppliers')
+          .doc(purchase.supplierId)
+          .get();
+      final businessData = businessSnapshot.data() ?? const <String, dynamic>{};
+      final supplierData = supplierSnapshot.data() ?? const <String, dynamic>{};
+      final balanceMinor =
+          (supplierData['balanceMinor'] as num?)?.round() ??
+          moneyToMinor(supplierData['balance']);
+      if (balanceMinor <= 0) return;
+      await OperationalAlertService(
+        apiClient: _apiClient,
+      ).onSupplierCreditCreated(
+        businessId: purchase.businessId,
+        businessName:
+            (businessData['name'] as String?)?.trim().isNotEmpty == true
+            ? (businessData['name'] as String).trim()
+            : 'Business',
+        branchId: branchId,
+        purchaseId: purchase.purchaseId,
+        supplierId: purchase.supplierId,
+        supplierName:
+            (supplierData['name'] as String?)?.trim().isNotEmpty == true
+            ? (supplierData['name'] as String).trim()
+            : purchase.supplierName,
+        balanceMinor: balanceMinor,
+      );
+    } catch (_) {
+      // Notification delivery is best-effort and cannot fail the purchase.
     }
   }
 

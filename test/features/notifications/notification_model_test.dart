@@ -33,6 +33,25 @@ void main() {
       expect(n.status, NotificationStatus.read);
     });
 
+    test('parses server-generated staff and membership events', () {
+      expect(
+        AppNotificationType.fromStorage('staff_activity'),
+        AppNotificationType.staffActivity,
+      );
+      expect(
+        AppNotificationType.fromStorage('membership_removed'),
+        AppNotificationType.membershipRemoved,
+      );
+      expect(
+        AppNotificationType.staffActivity.category,
+        NotificationCategory.staff,
+      );
+      expect(
+        AppNotificationType.membershipRemoved.category,
+        NotificationCategory.staff,
+      );
+    });
+
     test('parses notification image and destination link', () {
       final n = AppNotification.fromMap('media', {
         'title': 'New feature',
@@ -50,6 +69,8 @@ void main() {
     test('route allowlist rejects arbitrary routes', () {
       expect(NotificationRouteAllowlist.isAllowed('products'), isTrue);
       expect(NotificationRouteAllowlist.isAllowed('productDetails'), isTrue);
+      expect(NotificationRouteAllowlist.isAllowed('teamActivity'), isTrue);
+      expect(NotificationRouteAllowlist.isAllowed('inviteWithId'), isTrue);
       expect(
         NotificationRouteAllowlist.isAllowed('javascript:alert(1)'),
         isFalse,

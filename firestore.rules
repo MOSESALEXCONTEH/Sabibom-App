@@ -288,6 +288,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Durable Cloud Functions delivery ledger. Admin SDK only: clients must
+    // not inspect delivery state or reserve push attempts.
+    match /notification_delivery_ledger/{deliveryId} {
+      allow read, write: if false;
+    }
+
     match /feedback/{feedbackId} {
       // Top-level feedback inbox (support triage).
       allow create: if signedIn()
