@@ -5,7 +5,6 @@ enum EntitlementResolutionSource {
   freeDefault,
   activePlan,
   complimentary,
-  globalFreeAccess,
   expiredDowngrade,
   inactiveDowngrade,
 }
@@ -77,18 +76,6 @@ class ResolvedBusinessEntitlements {
   bool get wasDowngraded =>
       source == EntitlementResolutionSource.expiredDowngrade ||
       source == EntitlementResolutionSource.inactiveDowngrade;
-
-  ResolvedBusinessEntitlements withGlobalFreeAccess() {
-    if (tier == BillingTier.pro || tier == BillingTier.complimentary) {
-      return this;
-    }
-    return ResolvedBusinessEntitlements(
-      entitlements: BusinessEntitlements.globalFreeAccess(),
-      source: EntitlementResolutionSource.globalFreeAccess,
-      subscription: subscription,
-      plan: plan,
-    );
-  }
 
   static SubscriptionPlan? _findPlan(
     List<SubscriptionPlan> plans,

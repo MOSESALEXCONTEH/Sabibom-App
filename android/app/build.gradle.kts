@@ -19,24 +19,6 @@ if (keystorePropertiesFile.exists()) {
 val releaseBuildRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
-val googleTestAdMobAppId = "ca-app-pub-3940256099942544~3347511713"
-val adMobProperties = Properties()
-val adMobPropertiesFile = rootProject.file("admob.properties")
-if (adMobPropertiesFile.exists()) {
-    FileInputStream(adMobPropertiesFile).use(adMobProperties::load)
-}
-val configuredAdMobAppId =
-    ((project.findProperty("SABIBOM_ADMOB_APP_ID") as String?)
-        ?: adMobProperties.getProperty("SABIBOM_ADMOB_APP_ID"))?.trim()
-if (releaseBuildRequested &&
-    (configuredAdMobAppId.isNullOrBlank() || configuredAdMobAppId == googleTestAdMobAppId)
-) {
-    throw GradleException(
-        "A production AdMob app ID is required for release builds. Set " +
-            "SABIBOM_ADMOB_APP_ID in android/admob.properties, " +
-            "android/gradle.properties, or ~/.gradle/gradle.properties.",
-    )
-}
 val requiredSigningProperties = listOf("keyAlias", "keyPassword", "storeFile", "storePassword")
 if (releaseBuildRequested &&
     (!keystorePropertiesFile.exists() || requiredSigningProperties.any {
@@ -70,8 +52,6 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        manifestPlaceholders["sabibomAdmobAppId"] =
-            configuredAdMobAppId?.takeIf { it.isNotBlank() } ?: googleTestAdMobAppId
     }
 
     signingConfigs {

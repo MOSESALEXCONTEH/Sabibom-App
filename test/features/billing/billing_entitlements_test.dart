@@ -18,7 +18,7 @@ void main() {
         entitlements.isEnabled(BillingEntitlementKeys.reportsExport),
         isFalse,
       );
-      expect(entitlements.isEnabled(BillingEntitlementKeys.adsEnabled), isTrue);
+      expect(entitlements.toMap(), isNot(contains('ads.enabled')));
     });
 
     test('Pro enables premium tools and removes usage limits', () {
@@ -49,10 +49,7 @@ void main() {
         entitlements.isEnabled(BillingEntitlementKeys.messagingBulk),
         isTrue,
       );
-      expect(
-        entitlements.isEnabled(BillingEntitlementKeys.adsEnabled),
-        isFalse,
-      );
+      expect(entitlements.toMap(), isNot(contains('ads.enabled')));
     });
 
     test('Complimentary receives the same product access as Pro', () {
@@ -64,27 +61,13 @@ void main() {
       expect(complimentary.toMap(), pro.toMap());
     });
 
-    test('global free access unlocks Pro tools but retains ads', () {
-      final entitlements = BusinessEntitlements.globalFreeAccess();
-
-      expect(entitlements.tier, BillingTier.free);
-      expect(
-        entitlements.isUnlimited(BillingEntitlementKeys.branchesMax),
-        isTrue,
-      );
-      expect(
-        entitlements.isEnabled(BillingEntitlementKeys.reportsAdvanced),
-        isTrue,
-      );
-      expect(entitlements.isEnabled(BillingEntitlementKeys.adsEnabled), isTrue);
-    });
-
     test('stored values override defaults and unknown keys are ignored', () {
       final entitlements = BusinessEntitlements.fromMap(
         tier: BillingTier.free,
         values: const <String, dynamic>{
           BillingEntitlementKeys.staffMax: 5.0,
           BillingEntitlementKeys.reportsExport: true,
+          'ads.enabled': true,
           'unknown.limit': 999,
         },
       );
@@ -94,6 +77,7 @@ void main() {
         entitlements.isEnabled(BillingEntitlementKeys.reportsExport),
         isTrue,
       );
+      expect(entitlements.toMap(), isNot(contains('ads.enabled')));
       expect(entitlements.toMap(), isNot(contains('unknown.limit')));
       expect(entitlements.limit(BillingEntitlementKeys.branchesMax), 1);
     });

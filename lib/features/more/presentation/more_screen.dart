@@ -13,8 +13,6 @@ import '../../dashboard/application/dashboard_providers.dart';
 import '../../business_setup/application/business_experience_providers.dart';
 import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
-import '../../billing/application/ad_consent_controller.dart';
-import '../../billing/presentation/free_plan_banner_ad.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -53,9 +51,6 @@ class MoreScreen extends ConsumerWidget {
         : null;
     final showTeam = canManageStaff || canAssignBranches || isOwner;
     final capabilities = ref.watch(currentBusinessCapabilitiesProvider);
-    final privacyOptionsRequired =
-        ref.watch(adPrivacyOptionsRequiredProvider).asData?.value == true;
-
     final businessItems = <_MoreItem>[
       _MoreItem(
         Icons.storefront_outlined,
@@ -242,12 +237,6 @@ class MoreScreen extends ConsumerWidget {
         'Privacy Policy',
         () => context.push(AppRoutes.privacy),
       ),
-      if (privacyOptionsRequired)
-        _MoreItem(
-          Icons.tune_outlined,
-          'Privacy Choices',
-          () => _showPrivacyOptions(context, ref),
-        ),
       _MoreItem(
         Icons.description_outlined,
         'Terms',
@@ -287,8 +276,6 @@ class MoreScreen extends ConsumerWidget {
             label: const Text('Sign Out'),
             onPressed: () => _confirmSignOut(context, ref),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          const FreePlanBannerAd(),
         ],
       ),
     );
@@ -315,14 +302,6 @@ class MoreScreen extends ConsumerWidget {
     if (confirmed != true) return;
     await ref.read(authControllerProvider.notifier).signOut();
     if (context.mounted) context.go(AppRoutes.onboarding);
-  }
-
-  Future<void> _showPrivacyOptions(BuildContext context, WidgetRef ref) async {
-    final error = await ref
-        .read(adConsentControllerProvider)
-        .showPrivacyOptions();
-    if (!context.mounted || error == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
 }
 

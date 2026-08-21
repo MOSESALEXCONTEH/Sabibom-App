@@ -46,25 +46,6 @@ void main() {
     expect(result.source, EntitlementResolutionSource.freeDefault);
   });
 
-  test('global access unlocks a Free business with ads', () {
-    final result = ResolvedBusinessEntitlements.resolve(
-      subscription: null,
-      plans: const <SubscriptionPlan>[],
-      now: now,
-    ).withGlobalFreeAccess();
-
-    expect(result.tier, BillingTier.free);
-    expect(result.source, EntitlementResolutionSource.globalFreeAccess);
-    expect(
-      result.entitlements.isUnlimited(BillingEntitlementKeys.staffMax),
-      isTrue,
-    );
-    expect(
-      result.entitlements.isEnabled(BillingEntitlementKeys.adsEnabled),
-      isTrue,
-    );
-  });
-
   test('expired and paused subscriptions downgrade to Free', () {
     final expired = ResolvedBusinessEntitlements.resolve(
       subscription: subscription(end: now.subtract(const Duration(seconds: 1))),
@@ -131,7 +112,6 @@ void main() {
 
       expect(result.tier, BillingTier.pro);
       expect(result.source, EntitlementResolutionSource.activePlan);
-      expect(result.withGlobalFreeAccess(), same(result));
     },
   );
 }

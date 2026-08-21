@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,7 +8,6 @@ import '../features/maintenance/data/runtime_configuration_repository.dart';
 import '../features/maintenance/presentation/maintenance_screen.dart';
 import '../features/maintenance/application/release_gate.dart';
 import '../features/maintenance/presentation/update_required_screen.dart';
-import '../features/billing/application/ad_consent_controller.dart';
 
 /// Root widget that configures SabiBom's routed Material application.
 class SabiBomApp extends ConsumerStatefulWidget {
@@ -27,7 +24,6 @@ class _SabiBomAppState extends ConsumerState<SabiBomApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(ref.read(adConsentControllerProvider).initialize());
   }
 
   @override

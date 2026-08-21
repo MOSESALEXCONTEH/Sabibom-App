@@ -2,14 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sabibom/features/maintenance/domain/runtime_configuration.dart';
 
 void main() {
-  test('parses maintenance and Android release configuration', () {
+  test('parses maintenance, Pro billing, and Android release configuration', () {
     final configuration = RuntimeConfiguration.fromMap({
       'billing': {
-        'schemaVersion': 1,
-        'globalFreeAccessEnabled': true,
-        'adsEnabled': true,
-        'purchasesEnabled': false,
-        'message': 'Launch access is active.',
+        'schemaVersion': 2,
+        'globalFreeAccessEnabled': false,
+        'adsEnabled': false,
+        'purchasesEnabled': true,
+        'message': 'Upgrade to Pro to unlock all SabiBom features.',
         'revision': 2,
       },
       'maintenance': {
@@ -46,9 +46,7 @@ void main() {
     });
 
     expect(configuration.maintenance.blocksMobile, isTrue);
-    expect(configuration.billing.globalFreeAccessEnabled, isTrue);
-    expect(configuration.billing.adsEnabled, isTrue);
-    expect(configuration.billing.purchasesEnabled, isFalse);
+    expect(configuration.billing.purchasesEnabled, isTrue);
     expect(configuration.billing.revision, 2);
     expect(configuration.androidRelease.latestVersion, '2.4.0');
     expect(configuration.androidRelease.minimumSupportedVersion, '2.1.0');
@@ -61,13 +59,26 @@ void main() {
     expect(configuration.androidRelease.updatePolicy.revision, 3);
   });
 
+  test('retired schema-one global-free flags cannot pause Pro purchases', () {
+    final configuration = RuntimeConfiguration.fromMap({
+      'billing': {
+        'schemaVersion': 1,
+        'globalFreeAccessEnabled': true,
+        'adsEnabled': true,
+        'purchasesEnabled': false,
+      },
+      'maintenance': {'enabled': false, 'effectiveEnabled': false},
+    });
+
+    expect(configuration.billing.purchasesEnabled, isTrue);
+  });
+
   test('missing release configuration remains backward compatible', () {
     final configuration = RuntimeConfiguration.fromMap({
       'maintenance': {'enabled': false, 'effectiveEnabled': false},
     });
 
     expect(configuration.maintenance.blocksMobile, isFalse);
-    expect(configuration.billing.globalFreeAccessEnabled, isFalse);
     expect(configuration.billing.purchasesEnabled, isTrue);
     expect(configuration.androidRelease.minimumSupportedVersion, isNull);
     expect(configuration.androidRelease.updatePolicy.enabled, isFalse);

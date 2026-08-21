@@ -40,39 +40,30 @@ class RuntimeMaintenanceConfiguration {
 class RuntimeBillingAccessPolicy {
   const RuntimeBillingAccessPolicy({
     this.schemaVersion,
-    this.globalFreeAccessEnabled = false,
-    this.adsEnabled = true,
     this.purchasesEnabled = true,
-    this.message = 'Choose the plan that fits your business.',
+    this.message = 'Upgrade to Pro to unlock all SabiBom features.',
     this.revision = 0,
     this.updatedAt,
   });
 
   final int? schemaVersion;
-  final bool globalFreeAccessEnabled;
-  final bool adsEnabled;
   final bool purchasesEnabled;
   final String message;
   final int revision;
   final DateTime? updatedAt;
 
   factory RuntimeBillingAccessPolicy.fromMap(Map<String, dynamic> data) {
-    final globalAccess =
-        data['schemaVersion'] == 1 && data['globalFreeAccessEnabled'] == true;
     final message = data['message'];
     final updatedAt = data['updatedAt'];
     return RuntimeBillingAccessPolicy(
       schemaVersion: (data['schemaVersion'] as num?)?.toInt(),
-      globalFreeAccessEnabled: globalAccess,
-      adsEnabled: globalAccess ? true : data['adsEnabled'] != false,
-      purchasesEnabled: globalAccess
+      purchasesEnabled:
+          data['schemaVersion'] == 2 && data['purchasesEnabled'] == false
           ? false
-          : data['purchasesEnabled'] != false,
+          : true,
       message: message is String && message.trim().isNotEmpty
           ? message.trim()
-          : globalAccess
-          ? 'All SabiBom features are currently available free with ads.'
-          : 'Choose the plan that fits your business.',
+          : 'Upgrade to Pro to unlock all SabiBom features.',
       revision: (data['revision'] as num?)?.toInt() ?? 0,
       updatedAt: updatedAt is String
           ? DateTime.tryParse(updatedAt)?.toLocal()

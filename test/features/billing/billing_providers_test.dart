@@ -6,15 +6,6 @@ import 'package:sabibom/features/billing/domain/billing_entitlements.dart';
 import 'package:sabibom/features/billing/domain/billing_models.dart';
 import 'package:sabibom/features/billing/domain/billing_resolution.dart';
 import 'package:sabibom/features/billing/presentation/billing_gate.dart';
-import 'package:sabibom/features/maintenance/data/runtime_configuration_repository.dart';
-import 'package:sabibom/features/maintenance/domain/runtime_configuration.dart';
-
-const _maintenanceOff = RuntimeMaintenanceConfiguration(
-  enabled: false,
-  effectiveEnabled: false,
-  scope: 'all',
-  message: '',
-);
 
 void main() {
   test('active paid access remains Pro while plan catalog is loading', () {
@@ -40,6 +31,10 @@ void main() {
     final resolved = container.read(currentBusinessEntitlementsProvider);
 
     expect(resolved.requireValue.tier, BillingTier.pro);
+    expect(
+      resolved.requireValue.source,
+      EntitlementResolutionSource.activePlan,
+    );
   });
 
   test(
@@ -67,91 +62,14 @@ void main() {
       final resolved = container.read(currentBusinessEntitlementsProvider);
 
       expect(resolved.requireValue.tier, BillingTier.free);
-    },
-  );
-
-  test('global policy unlocks Free entitlements and retains ads', () {
-    final container = ProviderContainer(
-      overrides: [
-        runtimeConfigurationProvider.overrideWithValue(
-          const AsyncData(
-            RuntimeConfiguration(
-              maintenance: _maintenanceOff,
-              billing: RuntimeBillingAccessPolicy(
-                schemaVersion: 1,
-                globalFreeAccessEnabled: true,
-                purchasesEnabled: false,
-              ),
-            ),
-          ),
-        ),
-        currentBusinessSubscriptionProvider.overrideWithValue(
-          const AsyncData(null),
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    final resolved = container.read(currentBusinessEntitlementsProvider);
-    expect(
-      resolved.requireValue.source,
-      EntitlementResolutionSource.globalFreeAccess,
-    );
-    expect(
-      resolved.requireValue.entitlements.isUnlimited(
-        BillingEntitlementKeys.branchesMax,
-      ),
-      isTrue,
-    );
-    expect(
-      resolved.requireValue.entitlements.isEnabled(
-        BillingEntitlementKeys.adsEnabled,
-      ),
-      isTrue,
-    );
-  });
-
-  for (final subscriptionState in <AsyncValue<BusinessSubscription?>>[
-    const AsyncLoading(),
-    AsyncError(StateError('subscription unavailable'), StackTrace.empty),
-  ]) {
-    test('global policy unlocks immediately while subscription is '
-        '${subscriptionState.isLoading ? 'loading' : 'unavailable'}', () {
-      final container = ProviderContainer(
-        overrides: [
-          runtimeConfigurationProvider.overrideWithValue(
-            const AsyncData(
-              RuntimeConfiguration(
-                maintenance: _maintenanceOff,
-                billing: RuntimeBillingAccessPolicy(
-                  schemaVersion: 1,
-                  globalFreeAccessEnabled: true,
-                  purchasesEnabled: false,
-                ),
-              ),
-            ),
-          ),
-          currentBusinessSubscriptionProvider.overrideWithValue(
-            subscriptionState,
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      final resolved = container.read(currentBusinessEntitlementsProvider);
-      expect(resolved.hasValue, isTrue);
-      expect(
-        resolved.requireValue.source,
-        EntitlementResolutionSource.globalFreeAccess,
-      );
       expect(
         resolved.requireValue.entitlements.isEnabled(
           BillingEntitlementKeys.reportsAdvanced,
         ),
-        isTrue,
+        isFalse,
       );
-    });
-  }
+    },
+  );
 
   testWidgets('entitlement gate shows loading instead of a Pro paywall', (
     tester,
@@ -177,26 +95,18 @@ void main() {
     expect(find.textContaining('is a Pro feature'), findsNothing);
   });
 
-  testWidgets('global policy opens a gated feature immediately', (
+  testWidgets('Free business sees a Pro gate for premium tools', (
     tester,
   ) async {
+    final resolved = ResolvedBusinessEntitlements.resolve(
+      subscription: null,
+      plans: const <SubscriptionPlan>[],
+    );
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          runtimeConfigurationProvider.overrideWithValue(
-            const AsyncData(
-              RuntimeConfiguration(
-                maintenance: _maintenanceOff,
-                billing: RuntimeBillingAccessPolicy(
-                  schemaVersion: 1,
-                  globalFreeAccessEnabled: true,
-                  purchasesEnabled: false,
-                ),
-              ),
-            ),
-          ),
-          currentBusinessSubscriptionProvider.overrideWithValue(
-            const AsyncLoading(),
+          currentBusinessEntitlementsProvider.overrideWithValue(
+            AsyncData(resolved),
           ),
         ],
         child: const MaterialApp(
@@ -209,8 +119,12 @@ void main() {
       ),
     );
 
-    expect(find.text('Business health content'), findsOneWidget);
-    expect(find.textContaining('is a Pro feature'), findsNothing);
+    expect(find.text('Business health content'), findsNothing);
+    expect(
+      find.text('Business Health AI Score is a Pro feature'),
+      findsOneWidget,
+    );
+    expect(find.text('View plans'), findsOneWidget);
   });
 
   testWidgets('Free report history hides records older than 30 days', (

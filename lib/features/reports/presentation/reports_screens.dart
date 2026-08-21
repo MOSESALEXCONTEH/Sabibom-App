@@ -29,7 +29,6 @@ import '../../team/application/team_providers.dart';
 import '../../team/domain/app_permission.dart';
 import '../../billing/domain/billing_entitlements.dart';
 import '../../billing/presentation/billing_gate.dart';
-import '../../billing/presentation/free_plan_banner_ad.dart';
 
 class ReportsScreen extends ConsumerWidget {
   const ReportsScreen({super.key});
@@ -154,8 +153,6 @@ class ReportsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          const FreePlanBannerAd(),
         ],
       ),
     );

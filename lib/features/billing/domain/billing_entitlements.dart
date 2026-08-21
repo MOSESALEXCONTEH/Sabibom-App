@@ -8,7 +8,6 @@ abstract final class BillingEntitlementKeys {
   static const messagingBulk = 'messaging.bulk';
   static const approvalsEnabled = 'approvals.enabled';
   static const backupEnabled = 'backup.enabled';
-  static const adsEnabled = 'ads.enabled';
 
   static const all = <String>{
     branchesMax,
@@ -20,7 +19,6 @@ abstract final class BillingEntitlementKeys {
     messagingBulk,
     approvalsEnabled,
     backupEnabled,
-    adsEnabled,
   };
 }
 
@@ -59,16 +57,6 @@ class BusinessEntitlements {
     );
   }
 
-  factory BusinessEntitlements.globalFreeAccess() {
-    return BusinessEntitlements._(
-      BillingTier.free,
-      Map.unmodifiable(<String, Object>{
-        ..._proValues,
-        BillingEntitlementKeys.adsEnabled: true,
-      }),
-    );
-  }
-
   static const unlimited = -1;
 
   static const _freeValues = <String, Object>{
@@ -81,7 +69,6 @@ class BusinessEntitlements {
     BillingEntitlementKeys.messagingBulk: false,
     BillingEntitlementKeys.approvalsEnabled: false,
     BillingEntitlementKeys.backupEnabled: false,
-    BillingEntitlementKeys.adsEnabled: true,
   };
 
   static const _proValues = <String, Object>{
@@ -94,7 +81,6 @@ class BusinessEntitlements {
     BillingEntitlementKeys.messagingBulk: true,
     BillingEntitlementKeys.approvalsEnabled: true,
     BillingEntitlementKeys.backupEnabled: true,
-    BillingEntitlementKeys.adsEnabled: false,
   };
 
   final BillingTier tier;

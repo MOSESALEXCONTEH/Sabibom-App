@@ -63,13 +63,11 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       _ => false,
     };
 
-    if (!billingPolicy.globalFreeAccessEnabled && plans.hasValue) {
+    if (plans.hasValue) {
       _ensureStoreProducts(plans.requireValue);
     }
 
     return BillingScreenContent(
-      globalFreeAccess: billingPolicy.globalFreeAccessEnabled,
-      policyMessage: billingPolicy.message,
       purchasesEnabled: billingPolicy.purchasesEnabled,
       isOwner: isOwner,
       plans: plans,
@@ -249,8 +247,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
 @visibleForTesting
 class BillingScreenContent extends StatefulWidget {
   const BillingScreenContent({
-    required this.globalFreeAccess,
-    required this.policyMessage,
     required this.purchasesEnabled,
     required this.isOwner,
     required this.plans,
@@ -266,8 +262,6 @@ class BillingScreenContent extends StatefulWidget {
     super.key,
   });
 
-  final bool globalFreeAccess;
-  final String policyMessage;
   final bool purchasesEnabled;
   final bool isOwner;
   final AsyncValue<List<SubscriptionPlan>> plans;
@@ -294,10 +288,7 @@ class _BillingScreenContentState extends State<BillingScreenContent> {
         ? AppSpacing.md
         : AppSpacing.lg;
     final showRestore =
-        !widget.globalFreeAccess &&
-        widget.purchasesEnabled &&
-        widget.isOwner &&
-        widget.onRestore != null;
+        widget.purchasesEnabled && widget.isOwner && widget.onRestore != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -321,38 +312,13 @@ class _BillingScreenContentState extends State<BillingScreenContent> {
             horizontalPadding,
             40,
           ),
-          children: widget.globalFreeAccess
-              ? <Widget>[
-                  _FreeAccessHero(message: widget.policyMessage),
-                  const SizedBox(height: AppSpacing.lg),
-                  const _FreeAccessFeatureGrid(),
-                  const SizedBox(height: AppSpacing.lg),
-                  const _PurchasesPausedCard(),
-                  const SizedBox(height: AppSpacing.md),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: widget.onRefresh,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Refresh access'),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(
-                    'Access is managed securely by SabiBom.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: context.mutedTextColor,
-                    ),
-                  ),
-                ]
-              : <Widget>[
-                  const _PlansHero(),
-                  const SizedBox(height: AppSpacing.lg),
-                  _buildPlans(context),
-                  const SizedBox(height: AppSpacing.lg),
-                  _buildAccess(context),
-                ],
+          children: <Widget>[
+            const _PlansHero(),
+            const SizedBox(height: AppSpacing.lg),
+            _buildPlans(context),
+            const SizedBox(height: AppSpacing.lg),
+            _buildAccess(context),
+          ],
         ),
       ),
     );
@@ -505,47 +471,18 @@ class _PlansHero extends StatelessWidget {
   }
 }
 
-class _FreeAccessHero extends StatelessWidget {
-  const _FreeAccessHero({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return _HeroSurface(
-      eyebrow: 'FULL ACCESS ACTIVE',
-      title: 'All Pro tools are yours',
-      message: message,
-      trailing: const _BrandMark(celebratory: true),
-      footer: const Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.sm,
-        children: <Widget>[
-          _StatusChip(icon: Icons.campaign_outlined, label: 'Free with ads'),
-          _StatusChip(
-            icon: Icons.credit_card_off_outlined,
-            label: 'No payment needed',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _HeroSurface extends StatelessWidget {
   const _HeroSurface({
     required this.eyebrow,
     required this.title,
     required this.message,
     required this.trailing,
-    this.footer,
   });
 
   final String eyebrow;
   final String title;
   final String message;
   final Widget trailing;
-  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -617,10 +554,6 @@ class _HeroSurface extends StatelessWidget {
                 ),
               ],
             ),
-            if (footer != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.md),
-              footer!,
-            ],
           ],
         ),
       ),
@@ -629,15 +562,13 @@ class _HeroSurface extends StatelessWidget {
 }
 
 class _BrandMark extends StatelessWidget {
-  const _BrandMark({this.celebratory = false});
-
-  final bool celebratory;
+  const _BrandMark();
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       image: true,
-      label: celebratory ? 'SabiBom full access' : 'SabiBom Pro',
+      label: 'SabiBom Pro',
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
@@ -648,209 +579,6 @@ class _BrandMark extends StatelessWidget {
           'assets/images/SB icon.png',
           fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: context.surfaceColor.withValues(alpha: 0.8),
-        border: Border.all(color: context.brandTintBorder),
-        borderRadius: BorderRadius.circular(AppRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: AppSpacing.sm),
-          Flexible(
-            child: Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FreeAccessFeatureGrid extends StatelessWidget {
-  const _FreeAccessFeatureGrid();
-
-  static const _features = <(IconData, String, String)>[
-    (
-      Icons.storefront_outlined,
-      'Unlimited branches',
-      'Run every location from one workspace.',
-    ),
-    (
-      Icons.groups_outlined,
-      'Unlimited team',
-      'Bring your whole team into SabiBom.',
-    ),
-    (
-      Icons.insights_outlined,
-      'Advanced reports',
-      'See deeper trends across your business.',
-    ),
-    (
-      Icons.cloud_download_outlined,
-      'Backup & exports',
-      'Keep and export your business records.',
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final oneColumn =
-            constraints.maxWidth < 520 ||
-            MediaQuery.textScalerOf(context).scale(1) > 1.3;
-        final width = oneColumn
-            ? constraints.maxWidth
-            : (constraints.maxWidth - AppSpacing.md) / 2;
-        return Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
-          children: _features
-              .map(
-                (feature) => SizedBox(
-                  width: width,
-                  child: _FeatureCard(
-                    icon: feature.$1,
-                    title: feature.$2,
-                    description: feature.$3,
-                  ),
-                ),
-              )
-              .toList(growable: false),
-        );
-      },
-    );
-  }
-}
-
-class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        border: Border.all(color: context.borderColor),
-        borderRadius: BorderRadius.circular(AppRadii.card),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: context.brandTint,
-              borderRadius: BorderRadius.circular(AppRadii.card),
-            ),
-            child: Icon(icon, color: Theme.of(context).colorScheme.primary),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: context.mutedTextColor,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PurchasesPausedCard extends StatelessWidget {
-  const _PurchasesPausedCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      label:
-          'Pro purchases are paused. You will not be charged while free access '
-          'is active. Ads remain enabled.',
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: context.brandTint,
-          border: Border.all(color: context.brandTintBorder),
-          borderRadius: BorderRadius.circular(AppRadii.card),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Icon(
-              Icons.info_outline,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Pro purchases are paused',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  const Text(
-                    'You will not be charged while free access is active. '
-                    'Ads remain enabled.',
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );
