@@ -2,7 +2,7 @@ name: sabibom
 description: "SabiBom - AI Business Operations Manager"
 publish_to: "none"
 
-version: 1.0.0+4
+version: 1.0.0+5
 
 environment:
   sdk: ^3.12.2
