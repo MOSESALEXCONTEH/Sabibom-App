@@ -21,6 +21,9 @@ import '../domain/billing_entitlements.dart';
 import '../domain/billing_models.dart';
 import '../domain/billing_resolution.dart';
 
+const _paywallBlue = Color(0xFF3977F5);
+const _paywallCanvas = Color(0xFFF5F7FF);
+
 class BillingScreen extends ConsumerStatefulWidget {
   const BillingScreen({super.key});
 
@@ -303,40 +306,42 @@ class _BillingScreenContentState extends State<BillingScreenContent> {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('SabiBom Pro'),
-        actions: <Widget>[
-          if (showRestore)
-            TextButton(
-              onPressed: widget.busyProductId == null ? widget.onRestore : null,
-              child: const Text('Restore'),
+      backgroundColor: context.isDarkTheme
+          ? AppColors.backgroundDark
+          : _paywallCanvas,
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: widget.onRefresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              AppSpacing.sm,
+              horizontalPadding,
+              selectedPlan == null ? 40 : 190,
             ),
-          const SizedBox(width: AppSpacing.sm),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: widget.onRefresh,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding,
-            AppSpacing.sm,
-            horizontalPadding,
-            selectedPlan == null ? 40 : 150,
+            children: <Widget>[
+              _PaywallHeader(
+                onClose: () => Navigator.of(context).maybePop(),
+                onRestore: showRestore && widget.busyProductId == null
+                    ? widget.onRestore
+                    : null,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _ProHero(
+                controller: _benefitController,
+                currentPage: _benefitPage,
+                onPageChanged: (page) => setState(() => _benefitPage = page),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              _buildPlans(context),
+              const SizedBox(height: AppSpacing.xl),
+              const _FeatureComparison(),
+              const SizedBox(height: AppSpacing.xl),
+              _buildAccess(context),
+            ],
           ),
-          children: <Widget>[
-            _ProHero(
-              controller: _benefitController,
-              currentPage: _benefitPage,
-              onPageChanged: (page) => setState(() => _benefitPage = page),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _buildPlans(context),
-            const SizedBox(height: AppSpacing.lg),
-            const _FeatureComparison(),
-            const SizedBox(height: AppSpacing.lg),
-            _buildAccess(context),
-          ],
         ),
       ),
       bottomNavigationBar: selectedPlan == null
@@ -400,21 +405,6 @@ class _BillingScreenContentState extends State<BillingScreenContent> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              'Choose your billing plan',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Both plans unlock the same Pro features. Choose how often you pay.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: context.mutedTextColor,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
             ...plans.map(
               (plan) => Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -471,6 +461,69 @@ class _BillingScreenContentState extends State<BillingScreenContent> {
   }
 }
 
+class _PaywallHeader extends StatelessWidget {
+  const _PaywallHeader({required this.onClose, required this.onRestore});
+
+  final VoidCallback onClose;
+  final VoidCallback? onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget circularControl({required Widget child}) {
+      return Material(
+        color: context.surfaceColor,
+        elevation: 3,
+        shadowColor: context.elevationShadowColor,
+        shape: const CircleBorder(),
+        child: SizedBox.square(dimension: 48, child: child),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        circularControl(
+          child: IconButton(
+            key: const ValueKey<String>('close-paywall'),
+            tooltip: 'Close',
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ),
+        circularControl(
+          child: PopupMenuButton<String>(
+            key: const ValueKey<String>('paywall-menu'),
+            tooltip: 'More options',
+            icon: const Icon(Icons.more_horiz_rounded),
+            onSelected: (value) {
+              if (value == 'restore') onRestore?.call();
+            },
+            itemBuilder: (_) => <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                value: 'restore',
+                enabled: onRestore != null,
+                child: const Row(
+                  children: <Widget>[
+                    Icon(Icons.restore_rounded),
+                    SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Restore purchases',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ProHero extends StatelessWidget {
   const _ProHero({
     required this.controller,
@@ -484,9 +537,10 @@ class _ProHero extends StatelessWidget {
 
   static const _benefits = <({IconData icon, String title, String message})>[
     (
-      icon: Icons.trending_up_rounded,
-      title: 'Grow without limits',
-      message: 'Unlimited branches, staff and Sabi requests for your business.',
+      icon: Icons.receipt_long_rounded,
+      title: 'Professional business documents',
+      message:
+          'Create polished invoices, receipts and estimates in your brand.',
     ),
     (
       icon: Icons.insights_rounded,
@@ -495,155 +549,325 @@ class _ProHero extends StatelessWidget {
     ),
     (
       icon: Icons.groups_2_rounded,
-      title: 'Run a stronger team',
-      message:
-          'Approvals, backups and team tools built for growing businesses.',
+      title: 'Grow without limits',
+      message: 'Unlimited branches, staff and Sabi requests for your business.',
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
     final scale = MediaQuery.textScalerOf(context).scale(1);
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.md,
-      ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: context.isDarkTheme
-              ? const <Color>[Color(0xFF171B34), Color(0xFF272052)]
-              : const <Color>[Color(0xFFF0F4FF), Color(0xFFFFFFFF)],
-        ),
-        border: Border.all(color: context.brandTintBorder),
-        borderRadius: BorderRadius.circular(AppRadii.feature),
-      ),
-      child: Column(
-        children: <Widget>[
-          Text.rich(
-            TextSpan(
-              children: <InlineSpan>[
-                const TextSpan(text: 'Upgrade to '),
-                WidgetSpan(
-                  alignment: PlaceholderAlignment.middle,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 3,
+    return Column(
+      children: <Widget>[
+        Semantics(
+          key: const ValueKey<String>('paywall-title'),
+          header: true,
+          label: 'Upgrade to Pro for Unlimited Access',
+          child: Column(
+            children: <Widget>[
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      'Upgrade to',
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -1.0,
+                          ),
                     ),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: <Color>[Color(0xFFFFB547), Color(0xFFFF7A45)],
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 7),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 4,
                       ),
-                      borderRadius: BorderRadius.circular(AppRadii.input),
-                    ),
-                    child: Text(
-                      'PRO',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontStyle: FontStyle.italic,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: <Color>[Color(0xFFFFB844), Color(0xFFFF8A2B)],
+                        ),
+                        borderRadius: BorderRadius.circular(9),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: const Color(
+                              0xFFFF9E35,
+                            ).withValues(alpha: 0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'PRO',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          fontStyle: FontStyle.italic,
+                          height: 1,
+                        ),
                       ),
                     ),
-                  ),
+                    Text(
+                      'for',
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -1.0,
+                          ),
+                    ),
+                  ],
                 ),
-                const TextSpan(text: ' for unlimited access'),
-              ],
-            ),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.6,
-              height: 1.12,
-            ),
+              ),
+              Text(
+                'Unlimited Access',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -1.0,
+                  height: 1.12,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          SizedBox(
-            height: (150 + ((scale - 1).clamp(0, 1) * 145)).toDouble(),
-            child: PageView.builder(
-              controller: controller,
-              itemCount: _benefits.length,
-              onPageChanged: onPageChanged,
-              itemBuilder: (context, index) {
-                final benefit = _benefits[index];
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: context.surfaceColor,
-                    borderRadius: BorderRadius.circular(AppRadii.card),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: context.elevationShadowColor,
-                        blurRadius: 16,
-                        offset: const Offset(0, 7),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        SizedBox(
+          height: (220 + ((scale - 1).clamp(0, 1) * 90)).toDouble(),
+          child: PageView.builder(
+            controller: controller,
+            itemCount: _benefits.length,
+            onPageChanged: onPageChanged,
+            itemBuilder: (context, index) {
+              final benefit = _benefits[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                child: Column(
+                  children: <Widget>[
+                    Expanded(
+                      child: _BenefitArtwork(index: index, icon: benefit.icon),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      benefit.title,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        decoration: BoxDecoration(
-                          color: scheme.primary.withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          benefit.icon,
-                          color: scheme.primary,
-                          size: 32,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        benefit.title,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Flexible(
-                        child: Text(
-                          benefit.message,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: context.mutedTextColor,
-                                height: 1.35,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List<Widget>.generate(_benefits.length, (index) {
-              final selected = currentPage == index;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: selected ? 20 : 7,
-                height: 7,
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                decoration: BoxDecoration(
-                  color: selected ? scheme.primary : context.borderColor,
-                  borderRadius: BorderRadius.circular(99),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                  ],
                 ),
               );
-            }),
+            },
           ),
-        ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List<Widget>.generate(_benefits.length, (index) {
+            final selected = currentPage == index;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: selected ? _paywallBlue : context.borderColor,
+                shape: BoxShape.circle,
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+}
+
+class _BenefitArtwork extends StatelessWidget {
+  const _BenefitArtwork({required this.index, required this.icon});
+
+  final int index;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    if (index == 0) return const _InvoiceArtwork();
+    final colors = index == 1
+        ? const <Color>[Color(0xFFE8EEFF), Color(0xFFDCE7FF)]
+        : const <Color>[Color(0xFFF0E8FF), Color(0xFFE9DEFF)];
+    return Center(
+      child: Container(
+        width: 230,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: colors),
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(25),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x1A3766D5),
+                  blurRadius: 24,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: _paywallBlue, size: 72),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InvoiceArtwork extends StatelessWidget {
+  const _InvoiceArtwork();
+
+  @override
+  Widget build(BuildContext context) {
+    const swatches = <Color>[
+      Color(0xFFB94AD7),
+      Color(0xFF8657E8),
+      Color(0xFF3977F5),
+      Color(0xFF24BCD0),
+      Color(0xFF50C881),
+      Color(0xFFF6D747),
+      Color(0xFFFFAF2F),
+    ];
+    return Center(
+      child: SizedBox(
+        width: 270,
+        height: 170,
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: <Widget>[
+            Positioned(
+              top: 57,
+              child: Container(
+                width: 220,
+                height: 108,
+                padding: const EdgeInsets.fromLTRB(18, 29, 18, 12),
+                decoration: BoxDecoration(
+                  color: context.surfaceColor,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: context.elevationShadowColor,
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: <Widget>[
+                    Container(height: 9, color: _paywallBlue),
+                    const SizedBox(height: 9),
+                    ...List<Widget>.generate(
+                      3,
+                      (_) => Padding(
+                        padding: const EdgeInsets.only(bottom: 7),
+                        child: Row(
+                          children: <Widget>[
+                            Container(
+                              width: 17,
+                              height: 4,
+                              color: context.borderColor,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Container(
+                                height: 4,
+                                color: context.borderColor,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              width: 28,
+                              height: 4,
+                              color: context.borderColor,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 6,
+              child: Container(
+                width: 258,
+                height: 88,
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: context.surfaceColor,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x223766D5),
+                      blurRadius: 24,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Row(
+                        children: swatches
+                            .map(
+                              (color) => Expanded(
+                                child: Container(
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    borderRadius:
+                                        color == const Color(0xFF3977F5)
+                                        ? BorderRadius.circular(7)
+                                        : null,
+                                    border: color == const Color(0xFF3977F5)
+                                        ? Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Container(
+                      width: 24,
+                      height: 55,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF9500),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      alignment: Alignment.topCenter,
+                      padding: const EdgeInsets.only(top: 4),
+                      child: const CircleAvatar(
+                        radius: 7,
+                        backgroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -666,128 +890,133 @@ class _RecurringPlanOption extends StatelessWidget {
   Widget build(BuildContext context) {
     final interval = _normalizedInterval(plan.billingInterval);
     final yearly = interval == 'yearly';
-    final price =
+    final totalPrice =
         storePrice ??
         formatCurrency(plan.price, code: plan.currency, symbol: plan.currency);
-    final scheme = Theme.of(context).colorScheme;
+    final weeklyPrice = formatCurrency(
+      plan.price / (yearly ? 52 : 4.345),
+      code: plan.currency,
+      symbol: plan.currency,
+    );
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    final compact = MediaQuery.sizeOf(context).width < 370 || scale > 1.25;
+
+    final planName = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          yearly ? '12 Months' : '1 Month',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.4,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          totalPrice,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: context.mutedTextColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+    final weekly = Column(
+      crossAxisAlignment: compact
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.end,
+      children: <Widget>[
+        Text(
+          weeklyPrice,
+          textAlign: compact ? TextAlign.start : TextAlign.end,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: selected ? _paywallBlue : context.mutedTextColor,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.6,
+          ),
+        ),
+        Text(
+          '/ week',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: context.mutedTextColor),
+        ),
+      ],
+    );
 
     return Semantics(
       button: true,
       selected: selected,
-      label: '${yearly ? 'Yearly' : 'Monthly'} Pro plan, $price',
+      label: '${yearly ? 'Yearly' : 'Monthly'} Pro plan, $totalPrice',
       child: Stack(
         clipBehavior: Clip.none,
         children: <Widget>[
           Material(
-            color: selected ? context.brandTint : context.surfaceColor,
-            borderRadius: BorderRadius.circular(AppRadii.feature),
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(30),
             child: InkWell(
               key: ValueKey<String>('plan-option-${plan.id}'),
-              borderRadius: BorderRadius.circular(AppRadii.feature),
+              borderRadius: BorderRadius.circular(30),
               onTap: onSelected,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.lg),
+                padding: const EdgeInsets.fromLTRB(24, 27, 22, 24),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: selected ? scheme.primary : context.borderColor,
-                    width: selected ? 3 : 1.2,
+                    color: selected ? _paywallBlue : context.borderColor,
+                    width: selected ? 3.5 : 1.25,
                   ),
-                  borderRadius: BorderRadius.circular(AppRadii.feature),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: selected
+                      ? const <BoxShadow>[
+                          BoxShadow(
+                            color: Color(0x183977F5),
+                            blurRadius: 18,
+                            offset: Offset(0, 8),
+                          ),
+                        ]
+                      : null,
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: <Widget>[
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: selected ? scheme.primary : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: selected
-                              ? scheme.primary
-                              : context.borderColor,
-                          width: 2,
-                        ),
-                      ),
-                      child: selected
-                          ? const Icon(
-                              Icons.check,
-                              color: Colors.white,
-                              size: 17,
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
+                child: compact
+                    ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(
-                            yearly ? '12 Months' : '1 Month',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            yearly
-                                ? 'Billed once every year'
-                                : 'Billed monthly',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: context.mutedTextColor),
-                          ),
+                          planName,
+                          const SizedBox(height: AppSpacing.md),
+                          weekly,
                         ],
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: <Widget>[
-                          Text(
-                            price,
-                            textAlign: TextAlign.end,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  color: selected ? scheme.primary : null,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          Text(
-                            yearly ? '/ year' : '/ month',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: context.mutedTextColor),
-                          ),
+                          Expanded(child: planName),
+                          const SizedBox(width: AppSpacing.md),
+                          weekly,
                         ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ),
           if (yearly)
             Positioned(
               right: 18,
-              top: -11,
+              top: -13,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md,
-                  vertical: 5,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: <Color>[Color(0xFFFF6B57), Color(0xFFFF8A45)],
+                    colors: <Color>[Color(0xFFFF5F56), Color(0xFFFF7757)],
                   ),
                   borderRadius: BorderRadius.circular(99),
-                  boxShadow: <BoxShadow>[
+                  boxShadow: const <BoxShadow>[
                     BoxShadow(
-                      color: const Color(0xFFFF6B57).withValues(alpha: 0.28),
+                      color: Color(0x38FF5F56),
                       blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      offset: Offset(0, 4),
                     ),
                   ],
                 ),
@@ -795,7 +1024,7 @@ class _RecurringPlanOption extends StatelessWidget {
                   'BEST OFFER',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.5,
                   ),
@@ -816,8 +1045,8 @@ class _FeatureComparison extends StatelessWidget {
     (label: 'Team members', free: '2', pro: 'Unlimited'),
     (label: 'Report history', free: '30 days', pro: 'Unlimited'),
     (label: 'Sabi requests', free: '10/day', pro: 'Unlimited'),
-    (label: 'Advanced reports', free: '—', pro: 'Included'),
-    (label: 'Backups & approvals', free: '—', pro: 'Included'),
+    (label: 'Advanced reports', free: 'No', pro: 'Yes'),
+    (label: 'Backups & approvals', free: 'No', pro: 'Yes'),
   ];
 
   @override
@@ -826,34 +1055,39 @@ class _FeatureComparison extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'Enjoy unlimited Pro access',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          'Enjoy Unlimited PRO Access',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.6,
+          ),
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.lg),
         Container(
           decoration: BoxDecoration(
-            color: context.surfaceColor,
-            border: Border.all(color: context.borderColor),
-            borderRadius: BorderRadius.circular(AppRadii.feature),
+            color: context.isDarkTheme
+                ? const Color(0xFF20283B)
+                : const Color(0xFFF0F3FF),
+            borderRadius: BorderRadius.circular(28),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: <Widget>[
-              _ComparisonRow(
+              const _ComparisonRow(
                 label: 'Features',
                 free: 'Free',
                 pro: 'PRO',
                 header: true,
+                first: true,
               ),
-              ..._rows.map(
-                (row) => _ComparisonRow(
+              ...List<_ComparisonRow>.generate(_rows.length, (index) {
+                final row = _rows[index];
+                return _ComparisonRow(
                   label: row.label,
                   free: row.free,
                   pro: row.pro,
-                ),
-              ),
+                  last: index == _rows.length - 1,
+                );
+              }),
             ],
           ),
         ),
@@ -868,65 +1102,76 @@ class _ComparisonRow extends StatelessWidget {
     required this.free,
     required this.pro,
     this.header = false,
+    this.first = false,
+    this.last = false,
   });
 
   final String label;
   final String free;
   final String pro;
   final bool header;
+  final bool first;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final style = header
+    final baseStyle = header
         ? Theme.of(
             context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)
-        : Theme.of(context).textTheme.bodyMedium;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.md,
-      ),
-      decoration: BoxDecoration(
-        color: header ? context.brandTint : null,
-        border: header
-            ? null
-            : Border(top: BorderSide(color: context.borderColor)),
-      ),
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)
+        : Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
+    final negative = !header && free == 'No';
+    final positive = !header && pro == 'Yes';
+
+    return IntrinsicHeight(
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Expanded(flex: 5, child: Text(label, style: style)),
-          const SizedBox(width: AppSpacing.sm),
           Expanded(
-            flex: 2,
-            child: Text(
-              free,
-              textAlign: TextAlign.center,
-              style: style?.copyWith(
-                color: header ? context.mutedTextColor : null,
-                fontWeight: header ? FontWeight.w800 : FontWeight.w600,
-              ),
+            flex: 5,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 17, 8, 17),
+              child: Text(label, style: baseStyle),
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            flex: 2,
+            child: Center(
+              child: negative
+                  ? const Icon(Icons.close_rounded, color: Color(0xFFFF655A))
+                  : Text(
+                      free,
+                      textAlign: TextAlign.center,
+                      style: baseStyle?.copyWith(
+                        color: header ? context.mutedTextColor : null,
+                      ),
+                    ),
+            ),
+          ),
           Expanded(
             flex: 3,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 17),
               decoration: BoxDecoration(
-                color: scheme.primary.withValues(alpha: header ? 0.14 : 0.09),
-                borderRadius: BorderRadius.circular(AppRadii.input),
-              ),
-              child: Text(
-                pro,
-                textAlign: TextAlign.center,
-                style: style?.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w900,
+                color: context.surfaceColor,
+                borderRadius: BorderRadius.vertical(
+                  top: first ? const Radius.circular(22) : Radius.zero,
+                  bottom: last ? const Radius.circular(22) : Radius.zero,
                 ),
               ),
+              alignment: Alignment.center,
+              child: positive
+                  ? const Icon(Icons.check_rounded, color: Color(0xFF44D7A8))
+                  : Text(
+                      pro,
+                      textAlign: TextAlign.center,
+                      style: baseStyle?.copyWith(
+                        color: header ? _paywallBlue : null,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -965,48 +1210,40 @@ class _PurchaseFooter extends StatelessWidget {
         : 'Continue';
 
     return Material(
-      elevation: 16,
-      color: context.surfaceColor,
+      elevation: 18,
+      shadowColor: context.elevationShadowColor,
+      color: context.isDarkTheme ? AppColors.backgroundDark : _paywallCanvas,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            AppSpacing.sm,
-          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(
+              SizedBox(
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: enabled
-                      ? const LinearGradient(
-                          colors: <Color>[AppColors.primary, Color(0xFF635BFF)],
-                        )
-                      : null,
-                  color: enabled ? null : context.borderColor,
-                  borderRadius: BorderRadius.circular(AppRadii.card),
-                ),
                 child: FilledButton(
                   key: ValueKey<String>('purchase-${plan.id}'),
                   onPressed: enabled ? onContinue : null,
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    disabledBackgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    minimumSize: const Size.fromHeight(56),
+                    backgroundColor: _paywallBlue,
+                    disabledBackgroundColor: context.borderColor,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(64),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    elevation: enabled ? 5 : 0,
+                    shadowColor: const Color(0x553977F5),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
                       if (busy) ...<Widget>[
                         const SizedBox.square(
-                          dimension: 18,
+                          dimension: 19,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                            strokeWidth: 2.2,
                             color: Colors.white,
                           ),
                         ),
@@ -1016,34 +1253,35 @@ class _PurchaseFooter extends StatelessWidget {
                         child: Text(
                           label,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.w900),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                       if (enabled) ...<Widget>[
-                        const SizedBox(width: AppSpacing.sm),
-                        const Icon(Icons.arrow_forward_rounded),
+                        const SizedBox(width: AppSpacing.lg),
+                        const Icon(Icons.arrow_forward_rounded, size: 28),
                       ],
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: AppSpacing.xs,
+              const SizedBox(height: 10),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Icon(
-                    Icons.lock_clock_outlined,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  Text(
-                    'Secure Google Play billing • Cancel anytime',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: context.mutedTextColor,
-                      fontWeight: FontWeight.w700,
+                  Icon(Icons.schedule_rounded, size: 20, color: _paywallBlue),
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'CANCEL ANYTIME',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _paywallBlue,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.35,
+                      ),
                     ),
                   ),
                 ],
@@ -1052,7 +1290,7 @@ class _PurchaseFooter extends StatelessWidget {
               Wrap(
                 alignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: AppSpacing.xs,
+                spacing: 2,
                 children: <Widget>[
                   TextButton(
                     onPressed: () => unawaited(
@@ -1063,7 +1301,7 @@ class _PurchaseFooter extends StatelessWidget {
                     ),
                     child: const Text('Privacy Policy'),
                   ),
-                  Text('•', style: TextStyle(color: context.mutedTextColor)),
+                  Text('|', style: TextStyle(color: context.mutedTextColor)),
                   TextButton(
                     onPressed: () => unawaited(
                       launchUrl(
@@ -1071,7 +1309,7 @@ class _PurchaseFooter extends StatelessWidget {
                         mode: LaunchMode.externalApplication,
                       ),
                     ),
-                    child: const Text('Terms of Use'),
+                    child: const Text('User Agreement'),
                   ),
                 ],
               ),

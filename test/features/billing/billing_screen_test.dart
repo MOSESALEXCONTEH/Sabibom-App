@@ -37,7 +37,7 @@ const _yearlyPlan = SubscriptionPlan(
 const _oneTimePlan = SubscriptionPlan(
   id: 'growth-lifetime',
   name: 'Lifetime',
-  description: 'Retired lifetime offer.',
+  description: 'Unsupported lifetime offer.',
   currency: 'SLE',
   price: 5000,
   billingInterval: 'one_time',
@@ -55,9 +55,10 @@ final _freeAccess = ResolvedBusinessEntitlements.resolve(
 
 void main() {
   testWidgets(
-    'owner sees yearly and monthly Pro plans with yearly selected by default',
+    'screenshot-style paywall shows Yearly and Monthly with Yearly selected',
     (tester) async {
       SubscriptionPlan? purchased;
+      var restored = false;
       await tester.pumpWidget(
         _app(
           BillingScreenContent(
@@ -74,7 +75,7 @@ void main() {
               'growth_yearly': 'SLE 1,499.99',
             },
             onRefresh: () async {},
-            onRestore: () {},
+            onRestore: () => restored = true,
             onPurchase: (plan) => purchased = plan,
             onManage: (_) {},
             onRetryAccess: () {},
@@ -83,20 +84,44 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('unlimited access'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('paywall-title')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('close-paywall')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('paywall-menu')),
+        findsOneWidget,
+      );
+      expect(find.text('CANCEL ANYTIME'), findsOneWidget);
+      expect(find.text('Privacy Policy'), findsOneWidget);
+      expect(find.text('User Agreement'), findsOneWidget);
+      expect(find.text('Lifetime'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey<String>('paywall-menu')));
+      await tester.pumpAndSettle();
+      expect(find.text('Restore purchases'), findsOneWidget);
+      await tester.tap(find.text('Restore purchases'));
+      await tester.pumpAndSettle();
+      expect(restored, isTrue);
+
+      final yearlyOption = find.byKey(
+        const ValueKey<String>('plan-option-growth-yearly'),
+      );
+      await tester.scrollUntilVisible(
+        yearlyOption,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('12 Months'), findsOneWidget);
       expect(find.text('1 Month'), findsOneWidget);
       expect(find.text('BEST OFFER'), findsOneWidget);
       expect(find.text('SLE 1,499.99'), findsOneWidget);
       expect(find.text('SLE 149.99'), findsOneWidget);
-      expect(find.text('Lifetime'), findsNothing);
-      expect(
-        find.text('Secure Google Play billing • Cancel anytime'),
-        findsOneWidget,
-      );
-      expect(find.text('Privacy Policy'), findsOneWidget);
-      expect(find.text('Terms of Use'), findsOneWidget);
-      expect(find.text('Restore'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('purchase-growth-yearly')),
@@ -116,10 +141,11 @@ void main() {
       expect(purchased?.id, 'growth-monthly');
 
       await tester.scrollUntilVisible(
-        find.text('Enjoy unlimited Pro access'),
+        find.text('Enjoy Unlimited PRO Access'),
         300,
+        scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('Enjoy unlimited Pro access'), findsOneWidget);
+      expect(find.text('Enjoy Unlimited PRO Access'), findsOneWidget);
     },
   );
 
@@ -145,6 +171,15 @@ void main() {
       ),
     );
 
+    final yearlyOption = find.byKey(
+      const ValueKey<String>('plan-option-growth-yearly'),
+    );
+    await tester.scrollUntilVisible(
+      yearlyOption,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('12 Months'), findsOneWidget);
     expect(find.text('1 Month'), findsOneWidget);
     expect(
@@ -158,7 +193,9 @@ void main() {
     expect(button.onPressed, isNull);
   });
 
-  testWidgets('narrow large-text Pro layout has no overflow', (tester) async {
+  testWidgets('narrow large-text screenshot layout has no overflow', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 760);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -191,12 +228,13 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.textContaining('unlimited access'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('paywall-title')), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('BEST OFFER'),
+      find.byKey(const ValueKey<String>('plan-option-growth-yearly')),
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('BEST OFFER'), findsOneWidget);
   });
